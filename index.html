@@ -898,7 +898,7 @@
   }
   html[data-view="phone"] .image-toolbar > div { flex-wrap: wrap; gap: 0.4rem; }
   html[data-view="phone"] .toolbar-label { display: none; }       /* save space */
-  html[data-view="phone"] .remember-toggle-label { display: none; } /* keep just the switch */
+  html[data-view="phone"] .remember-toggle-label { display: inline; font-size: 0.58rem; } /* labelled so it reads as its own control, not the dark/light switch */
   html[data-view="phone"] .canvas-viewport {
     position: relative;
     top: 0;
@@ -945,6 +945,51 @@
   html[data-view="phone"] .cal-actions { flex-wrap: wrap; }
   html[data-view="phone"] .cal-btn { min-height: 40px; font-size: 0.62rem; }
   html[data-view="phone"] .cal-swatch { width: 46px; height: 52px; }
+
+  /* ── OVERFLOW "⋯" MENU (phone + iPad) ──────────────────────────────────────
+     On desktop the toolbar has room, so Dark/Light and Remember image stay
+     inline and the ⋯ button is hidden. On the cramped touch layouts, those two
+     move into a labelled drop-down opened by ⋯, which declutters the bar and
+     removes the unlabelled-switch confusion. */
+  .more-btn { display: none; }
+  .toolbar-extra { display: flex; align-items: center; gap: 0.5rem; }
+
+  html[data-view="phone"] .more-btn,
+  html[data-view="ipad"] .more-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    font-size: 1rem;
+    line-height: 1;
+  }
+  html[data-view="phone"] .toolbar-extra,
+  html[data-view="ipad"] .toolbar-extra {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0.6rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.8rem;
+    background: rgba(24,22,22,0.98);
+    border: 1px solid rgba(255,255,255,0.22);
+    border-radius: 10px;
+    padding: 0.85rem 0.95rem;
+    z-index: 40;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+  }
+  html[data-view="phone"] .toolbar-extra.open,
+  html[data-view="ipad"] .toolbar-extra.open { display: flex; }
+  /* Inside the menu there's always room for the label and a comfortable row. */
+  html[data-view="phone"] .toolbar-extra .remember-toggle-label,
+  html[data-view="ipad"] .toolbar-extra .remember-toggle-label {
+    display: inline; font-size: 0.62rem; color: rgba(255,255,255,0.85);
+  }
+  html[data-view="phone"] .toolbar-extra .remember-toggle-wrap,
+  html[data-view="ipad"] .toolbar-extra .remember-toggle-wrap {
+    justify-content: space-between; width: 100%;
+  }
   .source-note {
     font-size: 0.62rem;
     color: var(--text-secondary);
@@ -1007,10 +1052,13 @@
           <button class="toolbar-btn" id="zoom-reset-btn">Reset Zoom</button>
         </div>
         <button class="toolbar-btn" id="reset-btn">New Image</button>
-        <button class="toolbar-btn" id="bg-toggle">Dark / Light</button>
-        <div class="remember-toggle-wrap">
-          <span class="remember-toggle-label">Remember image</span>
-          <div class="remember-toggle" id="remember-toggle"></div>
+        <button class="toolbar-btn more-btn" id="more-btn" aria-label="More options">⋯</button>
+        <div class="toolbar-extra" id="toolbar-extra">
+          <button class="toolbar-btn" id="bg-toggle">Dark / Light</button>
+          <div class="remember-toggle-wrap">
+            <span class="remember-toggle-label">Remember image</span>
+            <div class="remember-toggle" id="remember-toggle"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -3134,6 +3182,23 @@ document.getElementById('bg-toggle').addEventListener('click', function(e) {
   const area = document.getElementById('image-area');
   area.classList.toggle('light-bg');
 });
+
+// ─── OVERFLOW "⋯" MENU (phone + iPad) ────────────────────────────────────────
+const moreBtn = document.getElementById('more-btn');
+const toolbarExtra = document.getElementById('toolbar-extra');
+if (moreBtn && toolbarExtra) {
+  moreBtn.addEventListener('click', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    toolbarExtra.classList.toggle('open');
+  });
+  // Close only on a tap outside the menu and its button, so flipping Dark/Light
+  // or Remember image inside the menu leaves it open.
+  document.addEventListener('click', function(e) {
+    if (toolbarExtra.contains(e.target) || moreBtn.contains(e.target)) return;
+    toolbarExtra.classList.remove('open');
+  });
+}
 
 // ─── RESET / NEW IMAGE ───────────────────────────────────────────────────────
 document.getElementById('reset-btn').addEventListener('click', function(e) {
