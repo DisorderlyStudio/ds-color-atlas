@@ -1076,40 +1076,60 @@
     padding-bottom: calc(0.55rem + env(safe-area-inset-bottom));
   }
   html[data-view="phone"] .vivid-bar-title {
-    font-size: 0.72rem;
+    font-size: 0.92rem;
     font-weight: 700;
     color: var(--accent);
     letter-spacing: 0.03em;
     flex: 0 0 auto;
   }
   html[data-view="phone"] .vivid-bar-end {
-    font-size: 0.66rem;
-    font-weight: 600;
+    font-size: 0.82rem;
+    font-weight: 700;
     color: var(--text-muted);
     flex: 0 0 auto;
   }
   html[data-view="phone"] .vivid-bar input[type="range"] {
     flex: 1 1 auto;
     min-width: 0;
-    height: 34px;
-    accent-color: var(--accent);
+    height: 44px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+  }
+  /* Thick, clearly coloured track so it reads as a slider at a glance. */
+  html[data-view="phone"] .vivid-bar input[type="range"]::-webkit-slider-runnable-track {
+    height: 10px;
+    border-radius: 5px;
+    background: linear-gradient(to right, #b4b4b4, #ff2d95);
+  }
+  /* Big finger-friendly thumb (was 12px globally — far too small to grab). */
+  html[data-view="phone"] .vivid-bar input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 3px solid #fff;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.35);
+    margin-top: -11px;   /* centre the 32px thumb on the 10px track */
   }
   html[data-view="phone"] .vivid-bar-reset {
     flex: 0 0 auto;
     font-family: inherit;
-    font-size: 0.66rem;
+    font-size: 0.82rem;
     font-weight: 700;
     color: var(--accent);
     background: var(--accent-light);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 0.4rem 0.6rem;
+    border-radius: 7px;
+    padding: 0.5rem 0.7rem;
     cursor: pointer;
   }
   /* The in-panel Vividness section is redundant on phone — the bar replaces it. */
   html[data-view="phone"] #vividness-section { display: none; }
-  /* Let the last results scroll clear of the fixed bar (~58px + safe area). */
-  html[data-view="phone"] .panel { padding-bottom: calc(60px + env(safe-area-inset-bottom)); }
+  /* Let the last results scroll clear of the fixed bar (~76px + safe area). */
+  html[data-view="phone"] .panel { padding-bottom: calc(78px + env(safe-area-inset-bottom)); }
 
   /* Calibration popup becomes a full-width bottom sheet on a phone. */
   html[data-view="phone"] .cal-panel {
