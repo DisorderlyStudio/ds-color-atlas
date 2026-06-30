@@ -869,7 +869,7 @@
 
   html[data-view="phone"] .main {
     grid-template-columns: 1fr;
-    grid-template-rows: 44dvh 1fr;
+    grid-template-rows: 52dvh 1fr;
     height: 100vh;
     height: 100dvh;
   }
@@ -990,6 +990,31 @@
   html[data-view="ipad"] .toolbar-extra .remember-toggle-wrap {
     justify-content: space-between; width: 100%;
   }
+
+  /* ── COLLAPSIBLE SECTIONS (phone) ──────────────────────────────────────────
+     Secondary controls collapse to a single tappable header so the screen
+     stays mostly image + colour matches. Tap the label to open/close. */
+  html[data-view="phone"] .panel-section.collapsible > .panel-label {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0;
+  }
+  html[data-view="phone"] .panel-section.collapsible > .panel-label::after {
+    content: '▾';
+    font-size: 0.7rem;
+    transition: transform 0.15s;
+  }
+  html[data-view="phone"] .panel-section.collapsible.collapsed > .panel-label::after {
+    transform: rotate(-90deg);
+  }
+  html[data-view="phone"] .panel-section.collapsible:not(.collapsed) > .panel-label {
+    margin-bottom: 0.65rem;
+  }
+  html[data-view="phone"] .panel-section.collapsible.collapsed > *:not(.panel-label) {
+    display: none;
+  }
   .source-note {
     font-size: 0.62rem;
     color: var(--text-secondary);
@@ -1093,7 +1118,7 @@
       </div>
 
       <!-- Brand selector -->
-      <div class="panel-section">
+      <div class="panel-section collapsible">
         <div class="panel-label">Select your brands</div>
         <div class="brand-dropdown-wrapper">
           <button class="brand-dropdown-btn" id="brand-dropdown-btn">
@@ -1107,7 +1132,7 @@
       </div>
 
       <!-- Global shift -->
-      <div class="panel-section">
+      <div class="panel-section collapsible collapsed">
         <div class="panel-label">Global warm / cool</div>
         <div class="slider-row">
           <span class="slider-label">Cool</span>
@@ -2945,6 +2970,17 @@ imageArea.addEventListener('touchend', function(e) {
   if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return;
   const idx = (y * canvas.width + x) * 4;
   pickColor(imgData.data[idx], imgData.data[idx+1], imgData.data[idx+2]);
+
+  // Drop a target marker at the tapped point so touch users can see exactly
+  // what they picked (there's no hovering pointer on touch). It stays put until
+  // the next tap. Positioned relative to the image area, matching the mouse path.
+  const ir = imageArea.getBoundingClientRect();
+  const mx = t.clientX - ir.left, my = t.clientY - ir.top;
+  [chRing, chDot].forEach(el => {
+    el.style.display = 'block';
+    el.style.left = mx + 'px';
+    el.style.top = my + 'px';
+  });
 });
 
 // ─── GLOBAL SLIDER ───────────────────────────────────────────────────────────
@@ -3197,6 +3233,15 @@ if (moreBtn && toolbarExtra) {
   document.addEventListener('click', function(e) {
     if (toolbarExtra.contains(e.target) || moreBtn.contains(e.target)) return;
     toolbarExtra.classList.remove('open');
+  });
+}
+
+// ─── COLLAPSIBLE SECTIONS (phone only) ───────────────────────────────────────
+if (document.documentElement.getAttribute('data-view') === 'phone') {
+  document.querySelectorAll('.panel-section.collapsible > .panel-label').forEach(function(label) {
+    label.addEventListener('click', function() {
+      this.parentElement.classList.toggle('collapsed');
+    });
   });
 }
 
