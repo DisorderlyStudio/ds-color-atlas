@@ -859,6 +859,92 @@
     white-space: nowrap;
   }
   .source-btn.active { background: var(--accent); color: #fff; }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     PHONE VIEW — activated via ?view=phone. Desktop and iPad layouts are
+     untouched; these rules only apply when html[data-view="phone"] is set.
+     The desktop side-by-side grid is unusable on a tall narrow screen, so
+     here the image sits on top and all controls stack and scroll beneath it.
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  html[data-view="phone"] .main {
+    grid-template-columns: 1fr;
+    grid-template-rows: 44dvh 1fr;
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  /* Image area becomes a simple vertical stack: toolbar on top, the image
+     viewport filling the rest. Flowing them (instead of the desktop's fixed
+     absolute offsets) means the toolbar can wrap to as many rows as it needs
+     without ever clipping or covering the image. */
+  html[data-view="phone"] .image-area {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    min-height: 0;
+  }
+  html[data-view="phone"] .image-toolbar {
+    position: relative;
+    flex: 0 0 auto;
+    height: auto;
+    min-height: 38px;
+    flex-wrap: wrap;
+    row-gap: 0.4rem;
+    gap: 0.4rem;
+    padding: 0.45rem 0.6rem;
+    padding-top: calc(0.45rem + env(safe-area-inset-top));
+  }
+  html[data-view="phone"] .image-toolbar > div { flex-wrap: wrap; gap: 0.4rem; }
+  html[data-view="phone"] .toolbar-label { display: none; }       /* save space */
+  html[data-view="phone"] .remember-toggle-label { display: none; } /* keep just the switch */
+  html[data-view="phone"] .canvas-viewport {
+    position: relative;
+    top: 0;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  /* With the image area no longer flex-centering, anchor the upload prompt
+     in the middle of the viewport explicitly. */
+  html[data-view="phone"] .upload-prompt {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    margin-top: 0;
+  }
+
+  /* The whole panel becomes one scrolling column under the image. */
+  html[data-view="phone"] .panel {
+    border-left: none;
+    border-top: 2px solid var(--border);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    min-height: 0;
+  }
+  html[data-view="phone"] .results-scroll { flex: none; overflow: visible; }
+
+  /* Bigger, finger-friendly tap targets throughout. */
+  html[data-view="phone"] .toolbar-btn { min-height: 34px; font-size: 0.72rem; padding: 0.3rem 0.7rem; }
+  html[data-view="phone"] .remember-toggle { width: 46px; height: 26px; }
+  html[data-view="phone"] .remember-toggle::after { width: 20px; height: 20px; }
+  html[data-view="phone"] .remember-toggle.on::after { transform: translateX(20px); }
+  html[data-view="phone"] .brand-dropdown-btn { font-size: 0.95rem; padding: 0.7rem 0.85rem; }
+  html[data-view="phone"] .source-btn { padding: 0.65rem 0.4rem; font-size: 0.82rem; }
+  html[data-view="phone"] .panel-section { padding: 0.85rem 1.1rem; }
+  html[data-view="phone"] .target-swatch { height: 48px; }
+  html[data-view="phone"] input[type="range"] { height: 30px; }
+
+  /* Calibration popup becomes a full-width bottom sheet on a phone. */
+  html[data-view="phone"] .cal-panel {
+    width: 100%;
+    left: 0; right: 0;
+    border-left: none;
+    padding-bottom: calc(1.2rem + env(safe-area-inset-bottom));
+  }
+  html[data-view="phone"] .cal-actions { flex-wrap: wrap; }
+  html[data-view="phone"] .cal-btn { min-height: 40px; font-size: 0.62rem; }
+  html[data-view="phone"] .cal-swatch { width: 46px; height: 52px; }
   .source-note {
     font-size: 0.62rem;
     color: var(--text-secondary);
