@@ -623,6 +623,74 @@
     border: 1px solid #fff;
   }
 
+  /* ── My calibrated pencils list ── */
+  .cal-count {
+    color: var(--accent);
+    font-weight: 700;
+  }
+  .cal-list-empty {
+    font-size: 0.66rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    line-height: 1.35;
+  }
+  html[data-view="phone"] .cal-list-empty { font-size: 0.82rem; }
+  .cal-list-row {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .cal-list-row:last-of-type { border-bottom: none; }
+  .cal-list-swatch {
+    width: 26px; height: 26px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    flex: 0 0 auto;
+    cursor: pointer;
+  }
+  .cal-list-info {
+    flex: 1; min-width: 0;
+    cursor: pointer;
+  }
+  .cal-list-code {
+    font-size: 0.74rem;
+    color: var(--text-primary);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+  .cal-list-name {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cal-list-brand {
+    font-size: 0.62rem;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+  .cal-list-reset {
+    flex: 0 0 auto;
+    font-family: inherit;
+    font-size: 0.66rem;
+    font-weight: 700;
+    color: var(--accent);
+    background: var(--accent-light);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.3rem 0.55rem;
+    cursor: pointer;
+  }
+  .cal-list-reset:hover { border-color: var(--accent); }
+  html[data-view="phone"] .cal-list-swatch { width: 34px; height: 34px; }
+  html[data-view="phone"] .cal-list-code { font-size: 0.88rem; }
+  html[data-view="phone"] .cal-list-name { font-size: 0.82rem; }
+  html[data-view="phone"] .cal-list-reset { font-size: 0.8rem; padding: 0.45rem 0.7rem; }
+
   .match-info { flex: 1; min-width: 0; }
 
   .match-code {
@@ -1211,6 +1279,14 @@
         <button class="source-mini-btn ghost" id="import-btn" onclick="document.getElementById('import-input').click()">Import my settings</button>
         <input type="file" id="import-input" accept="application/json,.json" style="display:none" onchange="importCalibrations(this)">
         <button class="source-mini-btn" id="apply-all-btn" style="display:none;" onclick="applyAllPresets()">Copy all to my settings</button>
+      </div>
+
+      <!-- My calibrated pencils -->
+      <div class="panel-section collapsible collapsed" id="cal-list-section">
+        <div class="panel-label">My calibrated pencils <span class="cal-count" id="cal-list-count"></span></div>
+        <div class="cal-list-empty" id="cal-list-empty">You haven't changed any pencils yet. Tap a match below and Save to tune one — it'll show up here so you can always find or undo it.</div>
+        <div id="cal-list"></div>
+        <button class="source-mini-btn ghost" id="cal-reset-all-btn" onclick="resetAllCalibrations()" style="margin-top:0.7rem; display:none;">Reset all my pencils</button>
       </div>
 
       <!-- Brand selector -->
@@ -2691,6 +2767,7 @@ document.addEventListener('click', function() {
 
 buildBrandList();
 updateSourceUI();
+renderCalList();
 
 // ─── FILE UPLOAD ─────────────────────────────────────────────────────────────
 const REMEMBER_IMAGE_KEY = 'ds_remember_image_enabled';
@@ -3344,6 +3421,7 @@ function saveCal() {
   };
   try { localStorage.setItem('ds_calibrations', JSON.stringify(calibrations)); } catch(e) {}
   closeCal();
+  renderCalList();
   if (lastR !== null) pickColor(lastR, lastG, lastB);
 }
 
@@ -3360,6 +3438,86 @@ function closeCal() {
   document.getElementById('cal-panel').classList.remove('open');
   document.getElementById('cal-backdrop').classList.remove('open');
   calTarget = null;
+}
+
+// ─── MY CALIBRATED PENCILS LIST ──────────────────────────────────────────────
+// A plain inventory of every pencil the user has personally tuned. This exists
+// so an extreme calibration can never "lose" a pencil: even when a big shift
+// pushes it out of the top-3 matches, it still appears here and can be jumped
+// to or reset in one tap. Always reflects the user's OWN map (never the
+// read-only studio presets).
+function findPencil(brandName, code) {
+  const brand = BRANDS[brandName];
+  if (!brand) return null;
+  return brand.pencils.find(p => p[0] === code) || null;
+}
+
+function renderCalList() {
+  const wrap = document.getElementById('cal-list');
+  const empty = document.getElementById('cal-list-empty');
+  const countEl = document.getElementById('cal-list-count');
+  const resetAllBtn = document.getElementById('cal-reset-all-btn');
+  if (!wrap) return;
+
+  const keys = Object.keys(calibrations);
+  if (countEl) countEl.textContent = keys.length ? `(${keys.length})` : '';
+  if (empty) empty.style.display = keys.length ? 'none' : '';
+  if (resetAllBtn) resetAllBtn.style.display = keys.length ? '' : 'none';
+
+  if (!keys.length) { wrap.innerHTML = ''; return; }
+
+  // Sort by brand then code for a stable, scannable list.
+  keys.sort();
+  let html = '';
+  keys.forEach(key => {
+    const idx = key.indexOf(':');
+    const brandName = key.slice(0, idx);
+    const code = key.slice(idx + 1);
+    const brand = BRANDS[brandName];
+    const pencil = findPencil(brandName, code);
+    if (!brand || !pencil) return; // skip stale/unknown keys safely
+    const [R, G, B] = applyCal(pencil[2], pencil[3], pencil[4], calibrations[key]);
+    const safeKey = key.replace(/'/g, "\\'");
+    html += `<div class="cal-list-row">
+      <div class="cal-list-swatch" style="background:rgb(${R},${G},${B})" onclick="openCalFromList('${brandName.replace(/'/g, "\\'")}','${code.replace(/'/g, "\\'")}')" title="Open this pencil"></div>
+      <div class="cal-list-info" onclick="openCalFromList('${brandName.replace(/'/g, "\\'")}','${code.replace(/'/g, "\\'")}')">
+        <div class="cal-list-code">${code} <span class="cal-list-name">${pencil[1]}</span></div>
+        <div class="cal-list-brand">${brand.short}</div>
+      </div>
+      <button class="cal-list-reset" onclick="resetOneCalibration('${safeKey}')">Reset</button>
+    </div>`;
+  });
+  wrap.innerHTML = html;
+}
+
+// Open a pencil's calibration panel from the list, always in the user's own
+// "My settings" context so the sliders show their values (not studio presets).
+function openCalFromList(brandName, code) {
+  if (calSource !== 'mine') { calSource = 'mine'; updateSourceUI(); }
+  openCal(brandName, code);
+}
+
+// Remove the user's tuning for one pencil (puts it back to its factory color).
+function resetOneCalibration(key) {
+  if (!calibrations[key]) return;
+  delete calibrations[key];
+  try { localStorage.setItem('ds_calibrations', JSON.stringify(calibrations)); } catch(e) {}
+  renderCalList();
+  updateSourceUI();
+  if (lastR !== null) pickColor(lastR, lastG, lastB);
+}
+
+// Clear ALL of the user's calibrations after a confirm (factory reset of "My
+// settings"). Studio presets are untouched — they live in the file, not here.
+function resetAllCalibrations() {
+  const n = Object.keys(calibrations).length;
+  if (!n) return;
+  if (!confirm(`Reset all ${n} of your calibrated pencil${n === 1 ? '' : 's'} back to normal? This can't be undone.`)) return;
+  calibrations = {};
+  try { localStorage.setItem('ds_calibrations', JSON.stringify(calibrations)); } catch(e) {}
+  renderCalList();
+  updateSourceUI();
+  if (lastR !== null) pickColor(lastR, lastG, lastB);
 }
 
 // ─── CALIBRATION SOURCE / PRESETS ────────────────────────────────────────────
@@ -3405,6 +3563,7 @@ function copyOnePresetToMine() {
   calibrations[key] = Object.assign({}, preset);
   try { localStorage.setItem('ds_calibrations', JSON.stringify(calibrations)); } catch(e) {}
   closeCal();
+  renderCalList();
   if (lastR !== null) pickColor(lastR, lastG, lastB);
 }
 
@@ -3417,6 +3576,7 @@ function applyAllPresets() {
     calibrations[key] = Object.assign({}, DS_PRESETS[key]);
   }
   try { localStorage.setItem('ds_calibrations', JSON.stringify(calibrations)); } catch(e) {}
+  renderCalList();
   setCalSource('mine'); // flip back so they see their now-updated settings
 }
 
@@ -3466,6 +3626,7 @@ function importCalibrations(input) {
       if (!count) { alert('No calibrated pencils were found in that file.'); }
       else {
         try { localStorage.setItem('ds_calibrations', JSON.stringify(calibrations)); } catch(e) {}
+        renderCalList();
         updateSourceUI();
         if (lastR !== null) pickColor(lastR, lastG, lastB);
         alert('Imported ' + count + ' calibrated pencil' + (count === 1 ? '' : 's') + ' into your settings.');
