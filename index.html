@@ -1352,7 +1352,7 @@
         <div class="source-note" id="source-note"></div>
         <button class="source-mini-btn ghost" id="export-btn" onclick="exportCalibrations()">Export my settings</button>
         <button class="source-mini-btn ghost" id="import-btn" onclick="document.getElementById('import-input').click()">Import my settings</button>
-        <input type="file" id="import-input" accept="application/json,.json" style="display:none" onchange="importCalibrations(this)">
+        <input type="file" id="import-input" accept=".json,application/json,text/plain,text/json" style="display:none" onchange="importCalibrations(this)">
         <button class="source-mini-btn" id="apply-all-btn" style="display:none;" onclick="applyAllPresets()">Copy all to my settings</button>
       </div>
 
