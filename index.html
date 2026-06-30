@@ -2740,9 +2740,22 @@ function loadImageFromSrc(src, opts) {
     // on iPad view the toolbar can wrap to two lines and grow taller, and
     // this keeps the fit calculation correct regardless of layout variant.
     const toolbarH = document.querySelector('.image-toolbar').offsetHeight;
-    const scale = Math.min((area.clientWidth - fitMargin * 2) / img.width, (area.clientHeight - toolbarH - fitMargin * 2) / img.height, 1);
-    canvas.width = Math.floor(img.width * scale);
-    canvas.height = Math.floor(img.height * scale);
+    const fitScale = Math.min((area.clientWidth - fitMargin * 2) / img.width, (area.clientHeight - toolbarH - fitMargin * 2) / img.height, 1);
+
+    // DISPLAY size at 100% zoom (CSS pixels): fits the image into the viewport.
+    baseDisplayW = Math.max(1, Math.floor(img.width * fitScale));
+    baseDisplayH = Math.max(1, Math.floor(img.height * fitScale));
+
+    // BACKING STORE = full native resolution (capped to a sane max so very large
+    // photos don't blow up memory). The screen then scales this DOWN to the
+    // display size, which keeps text and detail crisp on Retina displays and
+    // when zooming in — instead of magnifying a shrunken, low-detail copy.
+    const MAX_DIM = 4096;
+    const capScale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
+    canvas.width = Math.max(1, Math.round(img.width * capScale));
+    canvas.height = Math.max(1, Math.round(img.height * capScale));
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     imgData = ctx.getImageData(0, 0, canvas.width, canvas.height, { colorSpace: 'srgb' });
     document.getElementById('upload-prompt').style.display = 'none';
@@ -2801,7 +2814,8 @@ let zoomLevel = 1;
 const ZOOM_MIN = 1, ZOOM_MAX = 8, ZOOM_STEP = 1.4;
 const canvasViewport = document.getElementById('canvas-viewport');
 const canvasSizer = document.getElementById('canvas-sizer');
-let baseCanvasW = 0, baseCanvasH = 0; // canvas's natural CSS size at 100% zoom (= canvas.width/height)
+let baseCanvasW = 0, baseCanvasH = 0; // canvas's displayed CSS size at 100% zoom (fits the viewport)
+let baseDisplayW = 0, baseDisplayH = 0; // same as above; set on image load, used by resetZoom
 
 function applyZoom() {
   const w = baseCanvasW * zoomLevel, h = baseCanvasH * zoomLevel;
@@ -2857,8 +2871,8 @@ function zoomAt(newZoom, clientX, clientY) {
 
 function resetZoom() {
   zoomLevel = 1;
-  baseCanvasW = canvas.width;
-  baseCanvasH = canvas.height;
+  baseCanvasW = baseDisplayW;
+  baseCanvasH = baseDisplayH;
   applyZoom();
   canvasViewport.scrollLeft = 0;
   canvasViewport.scrollTop = 0;
