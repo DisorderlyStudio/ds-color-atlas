@@ -578,10 +578,11 @@
     position: relative;
   }
 
-  /* Global display adjustment: a pure on-screen filter applied to the colour
-     swatches only — NOT the reference image, which must stay true so colour
-     picks remain accurate. Does not affect matching or saved pencil data. */
-  .match-swatch, .target-swatch, .cal-swatch {
+  /* Global display adjustment: a pure on-screen filter applied to the pencil
+     match swatches only — NOT the reference image and NOT the selected-colour
+     chip, both of which must stay true so what you picked matches what you see.
+     Does not affect matching or saved pencil data. */
+  .match-swatch, .cal-swatch {
     filter: var(--display-filter, none);
   }
   .global-hint {
