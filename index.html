@@ -572,6 +572,21 @@
     position: relative;
   }
 
+  /* Global display adjustment: a pure on-screen filter applied to colour
+     swatches and the image so the tool can be made to suit any monitor. It
+     does not affect the underlying colour values or the matching maths. */
+  .match-swatch, .target-swatch, .cal-swatch, #canvas {
+    filter: var(--display-filter, none);
+  }
+  .global-hint {
+    font-size: 0.66rem;
+    color: #555;
+    font-weight: 600;
+    line-height: 1.35;
+    margin-top: 0.7rem;
+  }
+  html[data-view="phone"] .global-hint { font-size: 0.82rem; }
+
   .cal-dot {
     position: absolute;
     top: -3px; right: -3px;
@@ -632,11 +647,11 @@
     display: none;
     position: fixed;
     bottom: 0; right: 0;
-    width: 360px;
+    width: 430px;
     background: #fff;
     border-top: 1px solid var(--border);
     border-left: 1px solid var(--border);
-    padding: 1.2rem 1.3rem;
+    padding: 1.4rem 1.5rem;
     z-index: 100;
     box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
   }
@@ -662,7 +677,7 @@
   .cal-swatch-wrap { text-align: center; }
 
   .cal-swatch {
-    width: 52px; height: 60px;
+    width: 66px; height: 74px;
     border-radius: 3px;
     border: 2px solid #999;
     outline: 1px solid rgba(0,0,0,0.25);
@@ -689,7 +704,7 @@
 
   .cal-ch {
     font-size: 0.6rem;
-    width: 10px;
+    width: 44px;
     flex-shrink: 0;
     font-weight: bold;
     color: #1a1a1a;
@@ -698,7 +713,7 @@
   .cal-val {
     font-size: 0.6rem;
     color: var(--text-muted);
-    width: 28px;
+    width: 34px;
     text-align: right;
     flex-shrink: 0;
   }
@@ -952,7 +967,7 @@
   }
   html[data-view="phone"] .cal-actions { flex-wrap: wrap; }
   html[data-view="phone"] .cal-btn { min-height: 40px; font-size: 0.62rem; }
-  html[data-view="phone"] .cal-swatch { width: 46px; height: 52px; }
+  html[data-view="phone"] .cal-swatch { width: 60px; height: 68px; }
 
   /* ── OVERFLOW "⋯" MENU (phone + iPad) ──────────────────────────────────────
      On desktop the toolbar has room, so Dark/Light and Remember image stay
@@ -1177,14 +1192,25 @@
         </div>
       </div>
 
-      <!-- Global shift -->
+      <!-- Global display adjustments -->
       <div class="panel-section collapsible collapsed">
-        <div class="panel-label">Global warm / cool</div>
+        <div class="panel-label">Global adjustments</div>
         <div class="slider-row">
           <span class="slider-label">Cool</span>
           <input type="range" id="global-slider" min="-30" max="30" value="0" step="1">
           <span class="slider-label">Warm</span>
         </div>
+        <div class="slider-row" style="margin-top:0.75rem;">
+          <span class="slider-label">Darker</span>
+          <input type="range" id="global-bright" min="-50" max="60" value="0" step="1">
+          <span class="slider-label">Brighter</span>
+        </div>
+        <div class="slider-row" style="margin-top:0.75rem;">
+          <span class="slider-label">Muted</span>
+          <input type="range" id="global-sat" min="-50" max="80" value="0" step="1">
+          <span class="slider-label">Vivid</span>
+        </div>
+        <div class="global-hint">Adjusts how colors look on <em>your</em> screen — saved on this device. Doesn't change the pencil matches.</div>
       </div>
 
       <!-- Target color -->
@@ -1237,6 +1263,16 @@
       <span class="cal-ch" style="color:#6090e0">B</span>
       <input type="range" id="cal-b" min="-80" max="80" value="0" step="1">
       <span class="cal-val" id="cal-b-val">0</span>
+    </div>
+    <div class="cal-row">
+      <span class="cal-ch">Bright</span>
+      <input type="range" id="cal-bright" min="-100" max="100" value="0" step="1">
+      <span class="cal-val" id="cal-bright-val">0</span>
+    </div>
+    <div class="cal-row">
+      <span class="cal-ch">Vivid</span>
+      <input type="range" id="cal-sat" min="-100" max="100" value="0" step="1">
+      <span class="cal-val" id="cal-sat-val">0</span>
     </div>
   </div>
   <div class="cal-actions">
@@ -3036,13 +3072,70 @@ document.getElementById('global-slider').addEventListener('input', function() {
   if (lastR !== null) pickColor(lastR, lastG, lastB);
 });
 
+// ─── GLOBAL DISPLAY ADJUSTMENTS (brightness / vividness) ─────────────────────
+// Compensate for how a given monitor renders colour. Pure on-screen transform
+// (CSS filter on swatches + image) — does NOT change matching or saved pencil
+// data. Saved per device, since every screen is different.
+let globalBright = parseInt(localStorage.getItem('ds_global_bright') || '0') || 0;
+let globalSat = parseInt(localStorage.getItem('ds_global_sat') || '0') || 0;
+
+function applyGlobalDisplay() {
+  const filter = (globalBright === 0 && globalSat === 0)
+    ? 'none'
+    : `brightness(${1 + globalBright / 100}) saturate(${1 + globalSat / 100})`;
+  document.documentElement.style.setProperty('--display-filter', filter);
+}
+
+(function initGlobalDisplay() {
+  const gb = document.getElementById('global-bright');
+  const gs = document.getElementById('global-sat');
+  if (gb) {
+    gb.value = globalBright;
+    gb.addEventListener('input', function() {
+      globalBright = parseInt(this.value);
+      try { localStorage.setItem('ds_global_bright', String(globalBright)); } catch (e) {}
+      applyGlobalDisplay();
+    });
+  }
+  if (gs) {
+    gs.value = globalSat;
+    gs.addEventListener('input', function() {
+      globalSat = parseInt(this.value);
+      try { localStorage.setItem('ds_global_sat', String(globalSat)); } catch (e) {}
+      applyGlobalDisplay();
+    });
+  }
+  applyGlobalDisplay();
+})();
+
 // ─── COLOR LOGIC ─────────────────────────────────────────────────────────────
 function clamp(v) { return Math.max(0, Math.min(255, Math.round(v))); }
 
+// Apply a calibration to a base pencil colour. A calibration can carry R/G/B
+// nudges plus Brightness and Vividness (saturation). Order: nudges → vividness
+// (push away from / toward grey) → brightness (scale). All fields optional and
+// default to no change, so older calibrations (just r/g/b) behave exactly as
+// before.
+function applyCal(r, g, b, cal) {
+  cal = cal || {};
+  let R = r + (cal.r || 0), G = g + (cal.g || 0), B = b + (cal.b || 0);
+  const sat = (cal.sat || 0) / 100;       // -1 = grey, +1 = double the colourfulness
+  const bri = (cal.bright || 0) / 100;    // -1 = black, +1 = double the lightness
+  if (sat) {
+    const lum = 0.299 * R + 0.587 * G + 0.114 * B;
+    const f = 1 + sat;
+    R = lum + (R - lum) * f; G = lum + (G - lum) * f; B = lum + (B - lum) * f;
+  }
+  if (bri) {
+    const f = 1 + bri;
+    R *= f; G *= f; B *= f;
+  }
+  return [clamp(R), clamp(G), clamp(B)];
+}
+
 function getPencilRGB(brandName, p) {
   const key = brandName + ':' + p[0];
-  const cal = activeCalMap()[key] || {r:0,g:0,b:0};
-  return [clamp(p[2]+cal.r), clamp(p[3]+cal.g), clamp(p[4]+cal.b)];
+  return applyCal(p[2], p[3], p[4], activeCalMap()[key]);
 }
 
 function colorDist(r1,g1,b1,r2,g2,b2) {
@@ -3116,12 +3209,11 @@ function openCal(brandName, code) {
   const key = brandName + ':' + code;
   const ex = activeCalMap()[key] || {r:0,g:0,b:0};
 
-  document.getElementById('cal-r').value = ex.r;
-  document.getElementById('cal-g').value = ex.g;
-  document.getElementById('cal-b').value = ex.b;
-  document.getElementById('cal-r-val').textContent = ex.r;
-  document.getElementById('cal-g-val').textContent = ex.g;
-  document.getElementById('cal-b-val').textContent = ex.b;
+  document.getElementById('cal-r').value = ex.r || 0;
+  document.getElementById('cal-g').value = ex.g || 0;
+  document.getElementById('cal-b').value = ex.b || 0;
+  document.getElementById('cal-bright').value = ex.bright || 0;
+  document.getElementById('cal-sat').value = ex.sat || 0;
 
   const studio = (calSource === 'studio');
   // Title and the "your version" label adapt to whose settings you're viewing.
@@ -3146,15 +3238,20 @@ function updateCalPreview() {
   const dr = parseInt(document.getElementById('cal-r').value);
   const dg = parseInt(document.getElementById('cal-g').value);
   const db = parseInt(document.getElementById('cal-b').value);
-  document.getElementById('cal-r-val').textContent = dr >= 0 ? '+'+dr : dr;
-  document.getElementById('cal-g-val').textContent = dg >= 0 ? '+'+dg : dg;
-  document.getElementById('cal-b-val').textContent = db >= 0 ? '+'+db : db;
+  const bri = parseInt(document.getElementById('cal-bright').value);
+  const sat = parseInt(document.getElementById('cal-sat').value);
+  const fmt = v => v >= 0 ? '+' + v : '' + v;
+  document.getElementById('cal-r-val').textContent = fmt(dr);
+  document.getElementById('cal-g-val').textContent = fmt(dg);
+  document.getElementById('cal-b-val').textContent = fmt(db);
+  document.getElementById('cal-bright-val').textContent = fmt(bri);
+  document.getElementById('cal-sat-val').textContent = fmt(sat);
   const p = calTarget.pencil;
-  document.getElementById('cal-adj-swatch').style.background =
-    `rgb(${clamp(p[2]+dr)},${clamp(p[3]+dg)},${clamp(p[4]+db)})`;
+  const [R, G, B] = applyCal(p[2], p[3], p[4], { r: dr, g: dg, b: db, bright: bri, sat: sat });
+  document.getElementById('cal-adj-swatch').style.background = `rgb(${R},${G},${B})`;
 }
 
-['cal-r','cal-g','cal-b'].forEach(id =>
+['cal-r','cal-g','cal-b','cal-bright','cal-sat'].forEach(id =>
   document.getElementById(id).addEventListener('input', updateCalPreview)
 );
 
@@ -3164,7 +3261,9 @@ function saveCal() {
   calibrations[key] = {
     r: parseInt(document.getElementById('cal-r').value),
     g: parseInt(document.getElementById('cal-g').value),
-    b: parseInt(document.getElementById('cal-b').value)
+    b: parseInt(document.getElementById('cal-b').value),
+    bright: parseInt(document.getElementById('cal-bright').value),
+    sat: parseInt(document.getElementById('cal-sat').value)
   };
   try { localStorage.setItem('ds_calibrations', JSON.stringify(calibrations)); } catch(e) {}
   closeCal();
@@ -3175,6 +3274,8 @@ function resetCal() {
   document.getElementById('cal-r').value = 0;
   document.getElementById('cal-g').value = 0;
   document.getElementById('cal-b').value = 0;
+  document.getElementById('cal-bright').value = 0;
+  document.getElementById('cal-sat').value = 0;
   updateCalPreview();
 }
 
@@ -3224,7 +3325,7 @@ function copyOnePresetToMine() {
   const key = calTarget.brandName + ':' + calTarget.pencil[0];
   const preset = DS_PRESETS[key];
   if (!preset) { closeCal(); return; }
-  calibrations[key] = { r: preset.r, g: preset.g, b: preset.b };
+  calibrations[key] = Object.assign({}, preset);
   try { localStorage.setItem('ds_calibrations', JSON.stringify(calibrations)); } catch(e) {}
   closeCal();
   if (lastR !== null) pickColor(lastR, lastG, lastB);
@@ -3236,7 +3337,7 @@ function applyAllPresets() {
   if (!n) return;
   if (!confirm(`Copy all ${n} Disorderly Studio settings into your own? This replaces your current tuning for those pencils.`)) return;
   for (const key in DS_PRESETS) {
-    calibrations[key] = { r: DS_PRESETS[key].r, g: DS_PRESETS[key].g, b: DS_PRESETS[key].b };
+    calibrations[key] = Object.assign({}, DS_PRESETS[key]);
   }
   try { localStorage.setItem('ds_calibrations', JSON.stringify(calibrations)); } catch(e) {}
   setCalSource('mine'); // flip back so they see their now-updated settings
@@ -3278,7 +3379,10 @@ function importCalibrations(input) {
       for (const key in data) {
         const v = data[key];
         if (v && typeof v.r === 'number' && typeof v.g === 'number' && typeof v.b === 'number') {
-          calibrations[key] = { r: v.r, g: v.g, b: v.b };
+          const obj = { r: v.r, g: v.g, b: v.b };
+          if (typeof v.bright === 'number') obj.bright = v.bright;
+          if (typeof v.sat === 'number') obj.sat = v.sat;
+          calibrations[key] = obj;
           count++;
         }
       }
