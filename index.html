@@ -2505,7 +2505,13 @@ function saveSelectedBrands() {
 }
 
 const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
+// Request a wide-gamut (Display P3) canvas so photos/screenshots taken on a
+// wide-gamut screen render faithfully instead of being squeezed into sRGB and
+// looking muted. Browsers without P3 support quietly return an sRGB context, so
+// behaviour is never worse than before. Pixel sampling still reads sRGB values
+// (see getImageData below) to keep matching against the sRGB pencil data exact.
+const ctx = canvas.getContext('2d', { colorSpace: 'display-p3' })
+         || canvas.getContext('2d');
 
 // ─── BUILD BRAND DROPDOWN ────────────────────────────────────────────────────
 function updateDropdownLabel() {
@@ -2738,7 +2744,7 @@ function loadImageFromSrc(src, opts) {
     canvas.width = Math.floor(img.width * scale);
     canvas.height = Math.floor(img.height * scale);
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    imgData = ctx.getImageData(0, 0, canvas.width, canvas.height, { colorSpace: 'srgb' });
     document.getElementById('upload-prompt').style.display = 'none';
     canvas.style.display = 'block';
     document.getElementById('image-area').classList.add('has-image');
