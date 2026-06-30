@@ -2464,12 +2464,26 @@ try {
   if (c) {
     const arr = JSON.parse(c);
     myCollection = new Set(arr);
-    selectedBrands = new Set(arr); // everything in the collection is active by default
+    selectedBrands = new Set(arr); // default: everything in the collection active
+  }
+} catch(e) {}
+
+// Restore which brands were actually checked last time (only those still in the
+// collection), so unchecking a brand survives a refresh.
+try {
+  const sel = localStorage.getItem('ds_selected_brands');
+  if (sel) {
+    const selArr = JSON.parse(sel);
+    selectedBrands = new Set(selArr.filter(n => myCollection.has(n)));
   }
 } catch(e) {}
 
 function saveMyCollection() {
   try { localStorage.setItem('ds_my_collection', JSON.stringify([...myCollection])); } catch(e) {}
+}
+
+function saveSelectedBrands() {
+  try { localStorage.setItem('ds_selected_brands', JSON.stringify([...selectedBrands])); } catch(e) {}
 }
 
 const canvas = document.getElementById('canvas');
@@ -2562,6 +2576,7 @@ function renderBrandGroup(container, mfr, brandNames, isOpen, onToggleOpen, isAd
         if (isAddSection) myCollection.delete(name);
       }
       if (isAddSection) { saveMyCollection(); buildBrandList(); }
+      saveSelectedBrands();
       updateDropdownLabel();
       if (lastR !== null) pickColor(lastR, lastG, lastB);
     });
