@@ -2578,6 +2578,7 @@ let touchPanId = null; // identifies which finger/touch started the pan, to igno
 
 imageArea.addEventListener('touchstart', function(e) {
   if (!imgData || zoomLevel <= 1) return;
+  if (e.target.closest && e.target.closest('.image-toolbar')) return; // let toolbar buttons handle their own taps
   if (e.touches.length !== 1) return; // ignore multi-touch (pinch etc.)
   const t = e.touches[0];
   touchPanId = t.identifier;
@@ -2637,6 +2638,7 @@ function touchDist(a, b) {
 
 imageArea.addEventListener('touchstart', function(e) {
   if (!imgData) return;
+  if (e.target.closest && e.target.closest('.image-toolbar')) return; // let toolbar buttons handle their own taps
   if (e.touches.length === 2) {
     // A second finger means we're pinching, not panning — cancel any pan.
     isPanning = false;
@@ -2718,6 +2720,7 @@ imageArea.addEventListener('click', function(e) {
 
 imageArea.addEventListener('touchend', function(e) {
   if (!imgData) return;
+  if (e.target.closest && e.target.closest('.image-toolbar')) return; // toolbar taps are not colour samples; leave the button's click intact
   if (panMoved) return; // this touchend was the tail end of a pan drag, not a tap-to-sample
   e.preventDefault();
   const t = e.changedTouches[0];
