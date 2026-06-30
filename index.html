@@ -647,7 +647,7 @@
     display: none;
     position: fixed;
     bottom: 0; right: 0;
-    width: 430px;
+    width: 460px;
     background: #fff;
     border-top: 1px solid var(--border);
     border-left: 1px solid var(--border);
@@ -677,7 +677,7 @@
   .cal-swatch-wrap { text-align: center; }
 
   .cal-swatch {
-    width: 66px; height: 74px;
+    width: 100px; height: 112px;
     border-radius: 3px;
     border: 2px solid #999;
     outline: 1px solid rgba(0,0,0,0.25);
@@ -967,7 +967,7 @@
   }
   html[data-view="phone"] .cal-actions { flex-wrap: wrap; }
   html[data-view="phone"] .cal-btn { min-height: 40px; font-size: 0.62rem; }
-  html[data-view="phone"] .cal-swatch { width: 60px; height: 68px; }
+  html[data-view="phone"] .cal-swatch { width: 88px; height: 100px; }
 
   /* ── OVERFLOW "⋯" MENU (phone + iPad) ──────────────────────────────────────
      On desktop the toolbar has room, so Dark/Light and Remember image stay
@@ -1014,28 +1014,29 @@
     justify-content: space-between; width: 100%;
   }
 
-  /* ── COLLAPSIBLE SECTIONS (phone) ──────────────────────────────────────────
-     Secondary controls collapse to a single tappable header so the screen
-     stays mostly image + colour matches. Tap the label to open/close. */
-  html[data-view="phone"] .panel-section.collapsible > .panel-label {
+  /* ── COLLAPSIBLE SECTIONS (all views) ──────────────────────────────────────
+     Secondary controls collapse to a single tappable header so the panel
+     stays tidy. Tap the label to open/close. */
+  .panel-section.collapsible > .panel-label {
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-bottom: 0;
   }
-  html[data-view="phone"] .panel-section.collapsible > .panel-label::after {
+  .panel-section.collapsible > .panel-label::after {
     content: '▾';
-    font-size: 0.7rem;
+    font-size: 0.85rem;
+    color: var(--accent);
     transition: transform 0.15s;
   }
-  html[data-view="phone"] .panel-section.collapsible.collapsed > .panel-label::after {
+  .panel-section.collapsible.collapsed > .panel-label::after {
     transform: rotate(-90deg);
   }
-  html[data-view="phone"] .panel-section.collapsible:not(.collapsed) > .panel-label {
+  .panel-section.collapsible:not(.collapsed) > .panel-label {
     margin-bottom: 0.65rem;
   }
-  html[data-view="phone"] .panel-section.collapsible.collapsed > *:not(.panel-label) {
+  .panel-section.collapsible.collapsed > *:not(.panel-label) {
     display: none;
   }
 
@@ -1179,7 +1180,7 @@
       </div>
 
       <!-- Brand selector -->
-      <div class="panel-section collapsible collapsed">
+      <div class="panel-section collapsible">
         <div class="panel-label">Select your brands</div>
         <div class="brand-dropdown-wrapper">
           <button class="brand-dropdown-btn" id="brand-dropdown-btn">
@@ -1211,6 +1212,7 @@
           <span class="slider-label">Vivid</span>
         </div>
         <div class="global-hint">Adjusts how colors look on <em>your</em> screen — saved on this device. Doesn't change the pencil matches.</div>
+        <button class="source-mini-btn ghost" id="global-reset-btn" onclick="resetGlobalAdjustments()" style="margin-top:0.7rem;">Reset adjustments</button>
       </div>
 
       <!-- Target color -->
@@ -3108,6 +3110,20 @@ function applyGlobalDisplay() {
   applyGlobalDisplay();
 })();
 
+// Snap all three global sliders (warm/cool, brightness, vividness) back to neutral.
+function resetGlobalAdjustments() {
+  globalShift = 0; globalBright = 0; globalSat = 0;
+  document.getElementById('global-slider').value = 0;
+  document.getElementById('global-bright').value = 0;
+  document.getElementById('global-sat').value = 0;
+  try {
+    localStorage.removeItem('ds_global_bright');
+    localStorage.removeItem('ds_global_sat');
+  } catch (e) {}
+  applyGlobalDisplay();
+  if (lastR !== null) pickColor(lastR, lastG, lastB);
+}
+
 // ─── COLOR LOGIC ─────────────────────────────────────────────────────────────
 function clamp(v) { return Math.max(0, Math.min(255, Math.round(v))); }
 
@@ -3426,14 +3442,12 @@ if (moreBtn && toolbarExtra) {
   });
 }
 
-// ─── COLLAPSIBLE SECTIONS (phone only) ───────────────────────────────────────
-if (document.documentElement.getAttribute('data-view') === 'phone') {
-  document.querySelectorAll('.panel-section.collapsible > .panel-label').forEach(function(label) {
-    label.addEventListener('click', function() {
-      this.parentElement.classList.toggle('collapsed');
-    });
+// ─── COLLAPSIBLE SECTIONS (all views) ────────────────────────────────────────
+document.querySelectorAll('.panel-section.collapsible > .panel-label').forEach(function(label) {
+  label.addEventListener('click', function() {
+    this.parentElement.classList.toggle('collapsed');
   });
-}
+});
 
 // ─── RESET / NEW IMAGE ───────────────────────────────────────────────────────
 document.getElementById('reset-btn').addEventListener('click', function(e) {
