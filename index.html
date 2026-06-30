@@ -579,12 +579,32 @@
   }
 
   /* Global display adjustment: a pure on-screen filter applied to the pencil
-     match swatches only — NOT the reference image and NOT the selected-colour
-     chip, both of which must stay true so what you picked matches what you see.
-     Does not affect matching or saved pencil data. */
-  .match-swatch, .cal-swatch {
+     match swatches and the live-preview chips only — NOT the reference image
+     and NOT the selected-colour chip, both of which must stay true so what you
+     picked matches what you see. Does not affect matching or saved pencil data. */
+  .match-swatch, .cal-swatch, .vivid-chip {
     filter: var(--display-filter, none);
   }
+  .vivid-preview-label {
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin: 0.8rem 0 0.4rem;
+  }
+  .vivid-preview {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .vivid-chip {
+    width: 34px; height: 34px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    flex: 0 0 auto;
+  }
+  html[data-view="phone"] .vivid-chip { width: 42px; height: 42px; }
   .global-hint {
     font-size: 0.66rem;
     color: #555;
@@ -1215,6 +1235,8 @@
           <input type="range" id="global-sat" min="-80" max="80" value="0" step="1">
           <span class="slider-label">Vivid</span>
         </div>
+        <div class="vivid-preview-label">Live preview</div>
+        <div class="vivid-preview" id="vivid-preview"></div>
         <div class="global-hint">Makes the pencil swatches more or less vivid on <em>your</em> screen — saved on this device. Doesn't change the matches or your reference image.</div>
         <button class="source-mini-btn ghost" id="global-reset-btn" onclick="resetGlobalAdjustments()" style="margin-top:0.7rem;">Reset</button>
       </div>
@@ -3111,6 +3133,7 @@ function applyGlobalDisplay() {
     });
   }
   applyGlobalDisplay();
+  renderVividPreview([]);
 })();
 
 // Snap the vividness slider back to neutral.
@@ -3171,9 +3194,11 @@ function pickColor(r, g, b) {
 
   if (selectedBrands.size === 0) {
     scroll.innerHTML = '<div class="empty-results">Select at least one brand above</div>';
+    renderVividPreview([]);
     return;
   }
 
+  const previewColors = [];
   let html = '';
   selectedBrands.forEach(brandName => {
     const brand = BRANDS[brandName];
@@ -3182,6 +3207,8 @@ function pickColor(r, g, b) {
       const [pr,pg,pb] = getPencilRGB(brandName, p);
       return { code:p[0], name:p[1], r:pr, g:pg, b:pb, dist:colorDist(tr,tg,tb,pr,pg,pb) };
     }).sort((a,b) => a.dist-b.dist).slice(0,3);
+
+    previewColors.push([scored[0].r, scored[0].g, scored[0].b]);
 
     const key0 = brandName+':'+scored[0].code;
     const pct0 = Math.round((1-scored[0].dist/maxDist)*100);
@@ -3210,6 +3237,22 @@ function pickColor(r, g, b) {
   });
 
   scroll.innerHTML = html;
+  renderVividPreview(previewColors);
+}
+
+// Live preview strip shown under the Vivid slider so the effect is visible
+// without scrolling to the match list. Uses your real top matches when present,
+// otherwise a representative spread. Chips carry .vivid-chip so the same
+// on-screen filter applies and they shift the instant the slider moves.
+function renderVividPreview(colors) {
+  const el = document.getElementById('vivid-preview');
+  if (!el) return;
+  if (!colors || !colors.length) {
+    colors = [[200,70,70],[210,140,60],[205,195,80],[90,160,95],[70,130,200],[150,90,180]];
+  }
+  el.innerHTML = colors.slice(0,6).map(c =>
+    `<div class="vivid-chip" style="background:rgb(${c[0]},${c[1]},${c[2]})"></div>`
+  ).join('');
 }
 
 // ─── CALIBRATION ─────────────────────────────────────────────────────────────
