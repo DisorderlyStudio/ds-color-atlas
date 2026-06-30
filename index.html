@@ -3253,6 +3253,7 @@ const imageArea = document.getElementById('image-area');
 
 imageArea.addEventListener('mousedown', function(e) {
   if (!imgData || zoomLevel <= 1) return;
+  if (IS_TOUCH_VIEW) return; // touch has its own panning; ignore synthetic mouse events
   isPanning = true;
   panMoved = false;
   panStartX = e.clientX;
@@ -3412,6 +3413,7 @@ const chDot = document.getElementById('ch-dot');
 
 imageArea.addEventListener('mousemove', function(e) {
   if (!imgData) return;
+  if (IS_TOUCH_VIEW) return; // touch uses the fixed centre crosshair; ignore synthetic mouse events
   if (isPanning) return; // pan handler owns the overlay during a drag
   const cr = canvas.getBoundingClientRect();
   const x = e.clientX - cr.left;
