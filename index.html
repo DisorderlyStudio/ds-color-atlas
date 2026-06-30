@@ -1056,6 +1056,61 @@
   html[data-view="phone"] .target-swatch { height: 48px; }
   html[data-view="phone"] input[type="range"] { height: 30px; }
 
+  /* ── FLOATING VIVIDNESS BAR (phone only) ──────────────────────────────────
+     Hidden everywhere by default; desktop/iPad keep the in-panel slider. On
+     the phone it's pinned to the bottom of the screen, above the scrolling
+     results, so the real match swatches can scroll behind it and update live
+     as the slider moves. */
+  .vivid-bar { display: none; }
+  html[data-view="phone"] .vivid-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 30;                 /* above results, below cal sheet (99/100) */
+    background: var(--bg-panel);
+    border-top: 1.5px solid var(--accent);
+    box-shadow: 0 -3px 12px rgba(0,0,0,0.10);
+    padding: 0.55rem 0.85rem;
+    padding-bottom: calc(0.55rem + env(safe-area-inset-bottom));
+  }
+  html[data-view="phone"] .vivid-bar-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.03em;
+    flex: 0 0 auto;
+  }
+  html[data-view="phone"] .vivid-bar-end {
+    font-size: 0.66rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    flex: 0 0 auto;
+  }
+  html[data-view="phone"] .vivid-bar input[type="range"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 34px;
+    accent-color: var(--accent);
+  }
+  html[data-view="phone"] .vivid-bar-reset {
+    flex: 0 0 auto;
+    font-family: inherit;
+    font-size: 0.66rem;
+    font-weight: 700;
+    color: var(--accent);
+    background: var(--accent-light);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.6rem;
+    cursor: pointer;
+  }
+  /* The in-panel Vividness section is redundant on phone — the bar replaces it. */
+  html[data-view="phone"] #vividness-section { display: none; }
+  /* Let the last results scroll clear of the fixed bar (~58px + safe area). */
+  html[data-view="phone"] .panel { padding-bottom: calc(60px + env(safe-area-inset-bottom)); }
+
   /* Calibration popup becomes a full-width bottom sheet on a phone. */
   html[data-view="phone"] .cal-panel {
     width: 100%;
@@ -1304,7 +1359,7 @@
       </div>
 
       <!-- Screen vividness -->
-      <div class="panel-section collapsible collapsed">
+      <div class="panel-section collapsible collapsed" id="vividness-section">
         <div class="panel-label">Vividness</div>
         <div class="slider-row">
           <span class="slider-label">Muted</span>
@@ -1335,6 +1390,21 @@
       <div class="empty-results">Select brands above<br>then tap your image</div>
     </div>
   </div>
+</div>
+
+<!-- PHONE-ONLY FLOATING VIVIDNESS BAR -->
+<!-- On the phone the match swatches live in a scrolling column, so a vividness
+     slider parked up in the panel changes colours you can't see. This bar is
+     pinned to the bottom of the screen so you can scroll your real, named
+     matches behind it and watch them all shift live as you drag. The swatch
+     filter is a CSS var on <html>, so every swatch updates regardless of
+     scroll. Hidden on desktop/iPad (which keep the in-panel slider). -->
+<div class="vivid-bar" id="vivid-bar">
+  <span class="vivid-bar-title">Vividness</span>
+  <span class="vivid-bar-end">Muted</span>
+  <input type="range" id="global-sat-phone" min="-80" max="80" value="0" step="1" aria-label="Vividness">
+  <span class="vivid-bar-end">Vivid</span>
+  <button class="vivid-bar-reset" id="vivid-bar-reset" onclick="resetGlobalAdjustments()">Reset</button>
 </div>
 
 <!-- CALIBRATION PANEL -->
@@ -3219,16 +3289,29 @@ function applyGlobalDisplay() {
   document.documentElement.style.setProperty('--display-filter', filter);
 }
 
+// Keep both vividness sliders (the in-panel one and the phone floating bar)
+// showing the same value, so whichever one you grab, the other agrees.
+function syncVividSliders() {
+  const a = document.getElementById('global-sat');
+  const b = document.getElementById('global-sat-phone');
+  if (a) a.value = globalSat;
+  if (b) b.value = globalSat;
+}
+
+// Single source of truth for changing vividness from either slider.
+function setGlobalSat(v) {
+  globalSat = parseInt(v) || 0;
+  try { localStorage.setItem('ds_global_sat', String(globalSat)); } catch (e) {}
+  syncVividSliders();
+  applyGlobalDisplay();
+}
+
 (function initGlobalDisplay() {
-  const gs = document.getElementById('global-sat');
-  if (gs) {
-    gs.value = globalSat;
-    gs.addEventListener('input', function() {
-      globalSat = parseInt(this.value);
-      try { localStorage.setItem('ds_global_sat', String(globalSat)); } catch (e) {}
-      applyGlobalDisplay();
-    });
-  }
+  ['global-sat', 'global-sat-phone'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', function() { setGlobalSat(this.value); });
+  });
+  syncVividSliders();
   applyGlobalDisplay();
   renderVividPreview([]);
 })();
@@ -3236,9 +3319,8 @@ function applyGlobalDisplay() {
 // Snap the vividness slider back to neutral.
 function resetGlobalAdjustments() {
   globalSat = 0;
-  const gs = document.getElementById('global-sat');
-  if (gs) gs.value = 0;
   try { localStorage.removeItem('ds_global_sat'); } catch (e) {}
+  syncVividSliders();
   applyGlobalDisplay();
 }
 
