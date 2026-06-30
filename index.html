@@ -986,6 +986,37 @@
     transform: translateX(20px);
   }
 
+  /* ── IPAD READABILITY BUMPS ─────────────────────────────────────────────────
+     The iPad layout had been inheriting the small desktop panel text. These
+     enlarge the panel labels, brand/match text, controls, vividness labels,
+     collapse arrows and hints so everything is comfortable at arm's length.
+     Scoped to iPad only — desktop and phone are unaffected. */
+  html[data-view="ipad"] .panel-label { font-size: 0.86rem; }
+  html[data-view="ipad"] .panel-section.collapsible > .panel-label::after {
+    font-size: 1.3rem;
+    color: var(--accent);
+  }
+  html[data-view="ipad"] .brand-dropdown-btn { font-size: 0.9rem; padding: 0.6rem 0.8rem; }
+  html[data-view="ipad"] .brand-item { font-size: 0.9rem; }
+  html[data-view="ipad"] .source-btn { font-size: 0.78rem; padding: 0.55rem 0.35rem; }
+  html[data-view="ipad"] .source-note { font-size: 0.84rem; }
+  html[data-view="ipad"] .source-mini-btn { font-size: 0.78rem; }
+  html[data-view="ipad"] .brand-group-header { font-size: 0.82rem; }
+  html[data-view="ipad"] .match-code { font-size: 0.9rem; }
+  html[data-view="ipad"] .match-name { font-size: 1rem; }
+  html[data-view="ipad"] .match-pct { font-size: 0.9rem; }
+  html[data-view="ipad"] .target-info { font-size: 0.9rem; }
+  html[data-view="ipad"] .slider-label { font-size: 0.86rem; }
+  html[data-view="ipad"] .vivid-preview-label { font-size: 0.8rem; }
+  html[data-view="ipad"] .global-hint { font-size: 0.84rem; }
+  html[data-view="ipad"] .cal-list-code { font-size: 0.86rem; }
+  html[data-view="ipad"] .cal-list-name { font-size: 0.82rem; }
+  html[data-view="ipad"] .cal-list-brand { font-size: 0.74rem; }
+  html[data-view="ipad"] .cal-list-empty { font-size: 0.8rem; }
+  html[data-view="ipad"] .cal-list-reset { font-size: 0.78rem; }
+  html[data-view="ipad"] .toolbar-extra .toolbar-btn { font-size: 0.8rem; }
+  html[data-view="ipad"] .toolbar-extra .remember-toggle-label { font-size: 0.74rem; }
+
   /* ── CALIBRATION SOURCE TOGGLE + PRESETS (My settings ⇄ Disorderly Studio) ── */
   .source-section { display: flex; flex-direction: column; gap: 0.5rem; }
   .source-toggle {
@@ -1106,14 +1137,14 @@
     padding-bottom: calc(0.55rem + env(safe-area-inset-bottom));
   }
   html[data-view="phone"] .vivid-bar-title {
-    font-size: 0.92rem;
+    font-size: 1.04rem;
     font-weight: 700;
     color: var(--accent);
     letter-spacing: 0.03em;
     flex: 0 0 auto;
   }
   html[data-view="phone"] .vivid-bar-end {
-    font-size: 0.82rem;
+    font-size: 0.94rem;
     font-weight: 700;
     color: var(--text-muted);
     flex: 0 0 auto;
@@ -1311,15 +1342,15 @@
 
   /* Readability bump on phone: larger result text, bigger swatches, roomier
      rows, and a bigger accent-coloured collapse arrow that's easy to spot. */
-  html[data-view="phone"] .panel-label { font-size: 0.82rem; }
-  html[data-view="phone"] .brand-group-header { font-size: 0.68rem; padding: 0.7rem 1.1rem 0.4rem; }
+  html[data-view="phone"] .panel-label { font-size: 0.9rem; }
+  html[data-view="phone"] .brand-group-header { font-size: 0.86rem; padding: 0.7rem 1.1rem 0.4rem; }
   html[data-view="phone"] .match { padding: 0.85rem 1.1rem; gap: 0.85rem; }
-  html[data-view="phone"] .match-code { font-size: 0.92rem; }
-  html[data-view="phone"] .match-name { font-size: 1.02rem; }
-  html[data-view="phone"] .match-pct { font-size: 0.9rem; }
+  html[data-view="phone"] .match-code { font-size: 0.96rem; }
+  html[data-view="phone"] .match-name { font-size: 1.06rem; }
+  html[data-view="phone"] .match-pct { font-size: 0.94rem; }
   html[data-view="phone"] .match-swatch { width: 52px; height: 52px; }
   html[data-view="phone"] .panel-section.collapsible > .panel-label::after {
-    font-size: 1.1rem;
+    font-size: 1.35rem;
     color: var(--accent);
   }
   .source-mini-btn {
