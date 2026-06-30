@@ -498,8 +498,6 @@
   /* Each global slider gets a track that matches what it does, so it's not
      misleading (warm/cool = blue→orange, brightness = dark→light,
      vividness = grey→colourful). Other sliders keep the neutral grey track. */
-  #global-slider { background: linear-gradient(to right, #4a7ab5, #ccc, #c8714a); }
-  #global-bright { background: linear-gradient(to right, #555, #e9e9e9); }
   #global-sat    { background: linear-gradient(to right, #b4b4b4, #ff2d95); }
 
   input[type=range]::-webkit-slider-thumb {
@@ -654,14 +652,17 @@
   .cal-panel {
     display: none;
     position: fixed;
-    bottom: 0; right: 0;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
     width: 460px;
+    max-height: 88vh;
+    overflow-y: auto;
     background: #fff;
-    border-top: 1px solid var(--border);
-    border-left: 1px solid var(--border);
+    border: 1px solid var(--border);
+    border-radius: 10px;
     padding: 1.4rem 1.5rem;
     z-index: 100;
-    box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
+    box-shadow: 0 10px 44px rgba(0,0,0,0.28);
   }
 
   .cal-panel.open { display: block; }
@@ -969,8 +970,12 @@
   /* Calibration popup becomes a full-width bottom sheet on a phone. */
   html[data-view="phone"] .cal-panel {
     width: 100%;
-    left: 0; right: 0;
-    border-left: none;
+    top: auto; bottom: 0; left: 0; right: 0;
+    transform: none;
+    max-height: 85vh;
+    border: none;
+    border-top: 1px solid var(--border);
+    border-radius: 14px 14px 0 0;
     padding-bottom: calc(1.2rem + env(safe-area-inset-bottom));
   }
   html[data-view="phone"] .cal-actions { flex-wrap: wrap; }
@@ -1201,26 +1206,16 @@
         </div>
       </div>
 
-      <!-- Global display adjustments -->
+      <!-- Screen vividness -->
       <div class="panel-section collapsible collapsed">
-        <div class="panel-label">Global adjustments</div>
+        <div class="panel-label">Vividness</div>
         <div class="slider-row">
-          <span class="slider-label">Cool</span>
-          <input type="range" id="global-slider" min="-30" max="30" value="0" step="1">
-          <span class="slider-label">Warm</span>
-        </div>
-        <div class="slider-row" style="margin-top:0.75rem;">
-          <span class="slider-label">Darker</span>
-          <input type="range" id="global-bright" min="-60" max="60" value="0" step="1">
-          <span class="slider-label">Brighter</span>
-        </div>
-        <div class="slider-row" style="margin-top:0.75rem;">
           <span class="slider-label">Muted</span>
           <input type="range" id="global-sat" min="-80" max="80" value="0" step="1">
           <span class="slider-label">Vivid</span>
         </div>
-        <div class="global-hint">Adjusts how colors look on <em>your</em> screen — saved on this device. Doesn't change the pencil matches.</div>
-        <button class="source-mini-btn ghost" id="global-reset-btn" onclick="resetGlobalAdjustments()" style="margin-top:0.7rem;">Reset adjustments</button>
+        <div class="global-hint">Makes the pencil swatches more or less vivid on <em>your</em> screen — saved on this device. Doesn't change the matches or your reference image.</div>
+        <button class="source-mini-btn ghost" id="global-reset-btn" onclick="resetGlobalAdjustments()" style="margin-top:0.7rem;">Reset</button>
       </div>
 
       <!-- Target color -->
@@ -3091,37 +3086,21 @@ imageArea.addEventListener('touchend', function(e) {
   });
 });
 
-// ─── GLOBAL SLIDER ───────────────────────────────────────────────────────────
-document.getElementById('global-slider').addEventListener('input', function() {
-  globalShift = parseInt(this.value);
-  if (lastR !== null) pickColor(lastR, lastG, lastB);
-});
-
-// ─── GLOBAL DISPLAY ADJUSTMENTS (brightness / vividness) ─────────────────────
+// ─── GLOBAL DISPLAY ADJUSTMENT (vividness only) ──────────────────────────────
 // Compensate for how a given monitor renders colour. Pure on-screen transform
-// (CSS filter on swatches + image) — does NOT change matching or saved pencil
-// data. Saved per device, since every screen is different.
-let globalBright = parseInt(localStorage.getItem('ds_global_bright') || '0') || 0;
+// (CSS filter on swatches only — never the reference image) — does NOT change
+// matching or saved pencil data. Saved per device, since every screen differs.
 let globalSat = parseInt(localStorage.getItem('ds_global_sat') || '0') || 0;
 
 function applyGlobalDisplay() {
-  const filter = (globalBright === 0 && globalSat === 0)
+  const filter = (globalSat === 0)
     ? 'none'
-    : `brightness(${1 + globalBright / 100}) saturate(${1 + globalSat / 100})`;
+    : `saturate(${1 + globalSat / 100})`;
   document.documentElement.style.setProperty('--display-filter', filter);
 }
 
 (function initGlobalDisplay() {
-  const gb = document.getElementById('global-bright');
   const gs = document.getElementById('global-sat');
-  if (gb) {
-    gb.value = globalBright;
-    gb.addEventListener('input', function() {
-      globalBright = parseInt(this.value);
-      try { localStorage.setItem('ds_global_bright', String(globalBright)); } catch (e) {}
-      applyGlobalDisplay();
-    });
-  }
   if (gs) {
     gs.value = globalSat;
     gs.addEventListener('input', function() {
@@ -3133,18 +3112,13 @@ function applyGlobalDisplay() {
   applyGlobalDisplay();
 })();
 
-// Snap all three global sliders (warm/cool, brightness, vividness) back to neutral.
+// Snap the vividness slider back to neutral.
 function resetGlobalAdjustments() {
-  globalShift = 0; globalBright = 0; globalSat = 0;
-  document.getElementById('global-slider').value = 0;
-  document.getElementById('global-bright').value = 0;
-  document.getElementById('global-sat').value = 0;
-  try {
-    localStorage.removeItem('ds_global_bright');
-    localStorage.removeItem('ds_global_sat');
-  } catch (e) {}
+  globalSat = 0;
+  const gs = document.getElementById('global-sat');
+  if (gs) gs.value = 0;
+  try { localStorage.removeItem('ds_global_sat'); } catch (e) {}
   applyGlobalDisplay();
-  if (lastR !== null) pickColor(lastR, lastG, lastB);
 }
 
 // ─── COLOR LOGIC ─────────────────────────────────────────────────────────────
