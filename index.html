@@ -620,6 +620,14 @@
   }
 
   /* ── CALIBRATION PANEL ── */
+  .cal-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 99;
+  }
+  .cal-backdrop.open { display: block; }
   .cal-panel {
     display: none;
     position: fixed;
@@ -1200,6 +1208,7 @@
 </div>
 
 <!-- CALIBRATION PANEL -->
+<div class="cal-backdrop" id="cal-backdrop" onclick="closeCal()"></div>
 <div class="cal-panel" id="cal-panel">
   <div class="cal-title" id="cal-title">Calibrate pencil</div>
   <div class="cal-swatches">
@@ -3129,6 +3138,7 @@ function openCal(brandName, code) {
   document.getElementById('cal-app-swatch').style.background = `rgb(${pencil[2]},${pencil[3]},${pencil[4]})`;
   updateCalPreview();
   panel.classList.add('open');
+  document.getElementById('cal-backdrop').classList.add('open');
 }
 
 function updateCalPreview() {
@@ -3170,6 +3180,7 @@ function resetCal() {
 
 function closeCal() {
   document.getElementById('cal-panel').classList.remove('open');
+  document.getElementById('cal-backdrop').classList.remove('open');
   calTarget = null;
 }
 
