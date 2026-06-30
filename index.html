@@ -1319,8 +1319,9 @@
             <span class="remember-toggle-label">Remember image</span>
             <div class="remember-toggle" id="remember-toggle"></div>
           </div>
-          <button class="toolbar-btn menu-only" id="export-btn-m" onclick="exportCalibrations()">Export my settings</button>
-          <button class="toolbar-btn menu-only" id="import-btn-m" onclick="document.getElementById('import-input').click()">Import my settings</button>
+          <button class="toolbar-btn menu-only" id="share-btn-m" onclick="shareSettings()">Share my settings</button>
+          <button class="toolbar-btn menu-only" id="export-btn-m" onclick="exportCalibrations()">Save to a file (backup)</button>
+          <button class="toolbar-btn menu-only" id="import-btn-m" onclick="document.getElementById('import-input').click()">Load from a file</button>
         </div>
       </div>
     </div>
@@ -1350,8 +1351,9 @@
           <button class="source-btn" id="src-studio-btn" onclick="setCalSource('studio')">Disorderly Studio</button>
         </div>
         <div class="source-note" id="source-note"></div>
-        <button class="source-mini-btn ghost" id="export-btn" onclick="exportCalibrations()">Export my settings</button>
-        <button class="source-mini-btn ghost" id="import-btn" onclick="document.getElementById('import-input').click()">Import my settings</button>
+        <button class="source-mini-btn" id="share-btn" onclick="shareSettings()">Share my settings to another device</button>
+        <button class="source-mini-btn ghost" id="export-btn" onclick="exportCalibrations()">Save to a file (backup)</button>
+        <button class="source-mini-btn ghost" id="import-btn" onclick="document.getElementById('import-input').click()">Load from a file</button>
         <input type="file" id="import-input" accept=".json,application/json,text/plain,text/json" style="display:none" onchange="importCalibrations(this)">
         <button class="source-mini-btn" id="apply-all-btn" style="display:none;" onclick="applyAllPresets()">Copy all to my settings</button>
       </div>
@@ -2858,6 +2860,7 @@ document.addEventListener('click', function() {
 buildBrandList();
 updateSourceUI();
 renderCalList();
+maybeImportFromHash();
 
 // ─── FILE UPLOAD ─────────────────────────────────────────────────────────────
 const REMEMBER_IMAGE_KEY = 'ds_remember_image_enabled';
@@ -3637,6 +3640,8 @@ function updateSourceUI() {
   document.getElementById('src-studio-btn').classList.toggle('active', studio);
   // Export button only matters for your OWN settings; Copy-all only in studio view.
   document.getElementById('export-btn').style.display = studio ? 'none' : '';
+  const shareBtn = document.getElementById('share-btn');
+  if (shareBtn) shareBtn.style.display = studio ? 'none' : '';
   const impBtn = document.getElementById('import-btn');
   if (impBtn) impBtn.style.display = studio ? 'none' : '';
   document.getElementById('apply-all-btn').style.display = studio ? '' : 'none';
@@ -3719,6 +3724,85 @@ async function exportCalibrations() {
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ─── SHARE / RECEIVE SETTINGS VIA A LINK ─────────────────────────────────────
+// The file flow (export → Save to Files → Import → pick file) is too fiddly on
+// phones. Instead we pack the settings into a link the owner can AirDrop or
+// text to another device; opening that link offers to load them in one tap.
+// The data rides in the URL's hash (#s=…), which is never sent to any server,
+// so this stays as private as the file method and needs no backend.
+function encodeSettings(obj) {
+  const json = JSON.stringify(obj);
+  // UTF-8-safe base64, then made URL-safe.
+  const b64 = btoa(unescape(encodeURIComponent(json)));
+  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function decodeSettings(str) {
+  let b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (b64.length % 4) b64 += '=';
+  return JSON.parse(decodeURIComponent(escape(atob(b64))));
+}
+
+async function shareSettings() {
+  const keys = Object.keys(calibrations);
+  if (!keys.length) {
+    alert('You haven\u2019t calibrated any pencils yet. Tune a few first, then share.');
+    return;
+  }
+  const link = location.origin + location.pathname + '#s=' + encodeSettings(calibrations);
+  const n = keys.length;
+  const blurb = `My ${n} calibrated pencil${n === 1 ? '' : 's'} \u2014 open this link on your other device to load them.`;
+
+  // Phone/iPad: the native Share sheet sends the LINK (AirDrop, Messages, Mail).
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: 'My D.S. Color Atlas settings', text: blurb, url: link });
+      return;
+    }
+  } catch (err) {
+    if (err && err.name === 'AbortError') return; // user cancelled — fine
+  }
+  // Desktop / no Share API: copy the link so they can paste it anywhere.
+  try {
+    await navigator.clipboard.writeText(link);
+    alert('Settings link copied! Paste it into Messages, Mail, or Notes, then open it on your other device.');
+  } catch (e) {
+    prompt('Copy this link and open it on your other device:', link);
+  }
+}
+
+// On load, if the page was opened from a settings link, offer to add them.
+function maybeImportFromHash() {
+  const m = (location.hash || '').match(/^#s=(.+)$/);
+  if (!m) return;
+  let incoming;
+  try { incoming = decodeSettings(m[1]); } catch (e) { return; } // not ours / corrupt
+  // Always clear the hash first so a refresh never re-prompts.
+  try { history.replaceState(null, '', location.pathname + location.search); }
+  catch (e) { location.hash = ''; }
+  if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) return;
+
+  const clean = {};
+  let count = 0;
+  for (const key in incoming) {
+    const v = incoming[key];
+    if (v && typeof v.r === 'number' && typeof v.g === 'number' && typeof v.b === 'number') {
+      const o = { r: v.r, g: v.g, b: v.b };
+      if (typeof v.bright === 'number') o.bright = v.bright;
+      if (typeof v.sat === 'number') o.sat = v.sat;
+      clean[key] = o; count++;
+    }
+  }
+  if (!count) return;
+  if (confirm(`This link has ${count} calibrated pencil${count === 1 ? '' : 's'}. Add them to this device\u2019s settings?`)) {
+    for (const k in clean) calibrations[k] = clean[k];
+    try { localStorage.setItem('ds_calibrations', JSON.stringify(calibrations)); } catch (e) {}
+    renderCalList();
+    updateSourceUI();
+    if (lastR !== null) pickColor(lastR, lastG, lastB);
+    alert('Added ' + count + ' calibrated pencil' + (count === 1 ? '' : 's') + ' to this device.');
+  }
 }
 
 
