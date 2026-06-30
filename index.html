@@ -3684,17 +3684,37 @@ function applyAllPresets() {
 
 // Download the user's own calibrations as a JSON file (for backup, and so the
 // studio's settings can be published into DS_PRESETS above).
-function exportCalibrations() {
+async function exportCalibrations() {
   const keys = Object.keys(calibrations);
   if (!keys.length) {
     alert('You have not calibrated any pencils yet. Tune a few first, then export.');
     return;
   }
-  const blob = new Blob([JSON.stringify(calibrations, null, 2)], { type: 'application/json' });
+  const json = JSON.stringify(calibrations, null, 2);
+  const filename = 'ds-my-settings.json';
+
+  // On iPhone/iPad, hand the file to the native Share sheet so one tap can
+  // AirDrop it to another device, Save to Files, or send it by Messages/Mail.
+  // This is far simpler than a download link, which iOS tends to just open in
+  // a new tab instead of saving.
+  try {
+    const file = new File([json], filename, { type: 'application/json' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'My D.S. Color Atlas settings' });
+      return;
+    }
+  } catch (err) {
+    // Tapping "Cancel" on the share sheet lands here — just stop quietly.
+    if (err && err.name === 'AbortError') return;
+    // Any other issue: fall through to the plain download below.
+  }
+
+  // Desktop (and any browser without file sharing): download the file.
+  const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'ds-my-settings.json';
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
