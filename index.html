@@ -835,6 +835,58 @@
     transform: translateX(20px);
   }
 
+  /* ── CALIBRATION SOURCE TOGGLE + PRESETS (My settings ⇄ Disorderly Studio) ── */
+  .source-section { display: flex; flex-direction: column; gap: 0.5rem; }
+  .source-toggle {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .source-btn {
+    flex: 1;
+    padding: 0.45rem 0.3rem;
+    font-family: 'Quicksand', sans-serif;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .source-btn.active { background: var(--accent); color: #fff; }
+  .source-note {
+    font-size: 0.62rem;
+    color: var(--text-secondary);
+    line-height: 1.3;
+    min-height: 0.8rem;
+  }
+  .source-mini-btn {
+    width: 100%;
+    padding: 0.45rem;
+    font-family: 'Quicksand', sans-serif;
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: 1px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    border-radius: 6px;
+    transition: all 0.15s;
+  }
+  .source-mini-btn:hover { background: var(--accent-light); }
+  .source-mini-btn.ghost { border-color: var(--border); color: var(--text-secondary); }
+  .source-mini-btn.ghost:hover { border-color: var(--text-secondary); color: var(--text-primary); }
+  /* Studio (read-only) mode: dim the calibration sliders so it's clear you're
+     viewing Disorderly Studio's values, not editing your own. */
+  .cal-panel.studio .cal-sliders { opacity: 0.55; pointer-events: none; }
+
 </style>
 </head>
 <body>
@@ -894,6 +946,17 @@
 
   <div class="panel">
     <div class="panel-top">
+
+      <!-- Calibration source: My settings vs Disorderly Studio presets -->
+      <div class="panel-section source-section">
+        <div class="source-toggle">
+          <button class="source-btn active" id="src-mine-btn" onclick="setCalSource('mine')">My settings</button>
+          <button class="source-btn" id="src-studio-btn" onclick="setCalSource('studio')">Disorderly Studio</button>
+        </div>
+        <div class="source-note" id="source-note"></div>
+        <button class="source-mini-btn ghost" id="export-btn" onclick="exportCalibrations()">Export my settings</button>
+        <button class="source-mini-btn" id="apply-all-btn" style="display:none;" onclick="applyAllPresets()">Copy all to my settings</button>
+      </div>
 
       <!-- Brand selector -->
       <div class="panel-section">
@@ -971,9 +1034,10 @@
     </div>
   </div>
   <div class="cal-actions">
-    <button class="cal-btn" onclick="resetCal()">Reset</button>
+    <button class="cal-btn" id="cal-reset-btn" onclick="resetCal()">Reset</button>
     <button class="cal-btn" onclick="closeCal()">Cancel</button>
-    <button class="cal-btn save" onclick="saveCal()">Save pencil</button>
+    <button class="cal-btn save" id="cal-save-btn" onclick="saveCal()">Save pencil</button>
+    <button class="cal-btn save" id="cal-copy-btn" style="display:none;" onclick="copyOnePresetToMine()">Copy to my settings</button>
   </div>
 </div>
 
@@ -2120,6 +2184,20 @@ let imgData = null;
 let globalShift = 0;
 let lastR = null, lastG = null, lastB = null;
 let calibrations = {};
+
+// ─── DISORDERLY STUDIO PRESETS ───────────────────────────────────────────────
+// The studio's published calibration nudges, keyed "Brand:Code" → {r,g,b} — the
+// exact same shape as a user's own `calibrations`. Baked into this file (read-
+// only) so every visitor can browse and copy them. Populated by exporting the
+// studio's own settings and pasting the result between the braces below.
+// ▼▼▼ PASTE EXPORTED STUDIO SETTINGS INSIDE THESE BRACES ▼▼▼
+const DS_PRESETS = {};
+// ▲▲▲ ──────────────────────────────────────────────────── ▲▲▲
+
+let calSource = 'mine'; // 'mine' = user's own calibrations, 'studio' = DS_PRESETS
+function activeCalMap() { return calSource === 'studio' ? DS_PRESETS : calibrations; }
+function presetCount() { return Object.keys(DS_PRESETS).length; }
+
 let calTarget = null;
 let selectedBrands = new Set(["Prismacolor Premier"]);
 let myCollection = new Set(["Prismacolor Premier"]); // brands the user has added to their personal collection
@@ -2321,6 +2399,7 @@ document.addEventListener('click', function() {
 });
 
 buildBrandList();
+updateSourceUI();
 
 // ─── FILE UPLOAD ─────────────────────────────────────────────────────────────
 const REMEMBER_IMAGE_KEY = 'ds_remember_image_enabled';
@@ -2745,7 +2824,7 @@ function clamp(v) { return Math.max(0, Math.min(255, Math.round(v))); }
 
 function getPencilRGB(brandName, p) {
   const key = brandName + ':' + p[0];
-  const cal = calibrations[key] || {r:0,g:0,b:0};
+  const cal = activeCalMap()[key] || {r:0,g:0,b:0};
   return [clamp(p[2]+cal.r), clamp(p[3]+cal.g), clamp(p[4]+cal.b)];
 }
 
@@ -2789,7 +2868,7 @@ function pickColor(r, g, b) {
     scored.forEach((m, i) => {
       const pct = Math.round((1-m.dist/maxDist)*100);
       const key = brandName+':'+m.code;
-      const isCal = !!calibrations[key];
+      const isCal = !!activeCalMap()[key];
       html += `<div class="match" onclick="openCal('${brandName}','${m.code}')">
         <span class="match-num">${i+1}</span>
         <div class="match-swatch" style="background:rgb(${m.r},${m.g},${m.b})">
@@ -2818,7 +2897,7 @@ function openCal(brandName, code) {
   calTarget = { brandName, pencil };
 
   const key = brandName + ':' + code;
-  const ex = calibrations[key] || {r:0,g:0,b:0};
+  const ex = activeCalMap()[key] || {r:0,g:0,b:0};
 
   document.getElementById('cal-r').value = ex.r;
   document.getElementById('cal-g').value = ex.g;
@@ -2827,10 +2906,21 @@ function openCal(brandName, code) {
   document.getElementById('cal-g-val').textContent = ex.g;
   document.getElementById('cal-b-val').textContent = ex.b;
 
-  document.getElementById('cal-title').textContent = `Calibrate ${code} — ${pencil[1]} (${brand.short})`;
+  const studio = (calSource === 'studio');
+  // Title and the "your version" label adapt to whose settings you're viewing.
+  document.getElementById('cal-title').textContent =
+    (studio ? `Disorderly Studio: ${code} — ` : `Calibrate ${code} — `) + `${pencil[1]} (${brand.short})`;
+  // In Studio mode the sliders are a read-only view of the studio's tuning, and
+  // the actions become "Copy to my settings" instead of edit/save.
+  const panel = document.getElementById('cal-panel');
+  panel.classList.toggle('studio', studio);
+  document.getElementById('cal-reset-btn').style.display = studio ? 'none' : '';
+  document.getElementById('cal-save-btn').style.display = studio ? 'none' : '';
+  document.getElementById('cal-copy-btn').style.display = studio ? '' : 'none';
+
   document.getElementById('cal-app-swatch').style.background = `rgb(${pencil[2]},${pencil[3]},${pencil[4]})`;
   updateCalPreview();
-  document.getElementById('cal-panel').classList.add('open');
+  panel.classList.add('open');
 }
 
 function updateCalPreview() {
@@ -2874,6 +2964,82 @@ function closeCal() {
   document.getElementById('cal-panel').classList.remove('open');
   calTarget = null;
 }
+
+// ─── CALIBRATION SOURCE / PRESETS ────────────────────────────────────────────
+// Switch between the user's own settings and the studio's published presets.
+function setCalSource(src) {
+  calSource = src;
+  closeCal(); // any open calibration panel belonged to the previous source
+  updateSourceUI();
+  if (lastR !== null) pickColor(lastR, lastG, lastB); // re-rank matches for the new source
+}
+
+function updateSourceUI() {
+  const studio = (calSource === 'studio');
+  document.getElementById('src-mine-btn').classList.toggle('active', !studio);
+  document.getElementById('src-studio-btn').classList.toggle('active', studio);
+  // Export button only matters for your OWN settings; Copy-all only in studio view.
+  document.getElementById('export-btn').style.display = studio ? 'none' : '';
+  document.getElementById('apply-all-btn').style.display = studio ? '' : 'none';
+
+  const note = document.getElementById('source-note');
+  const n = presetCount();
+  if (studio) {
+    note.textContent = n
+      ? `Viewing Disorderly Studio's tuning (${n} pencil${n === 1 ? '' : 's'}). Open any match to see it, or copy it to your own.`
+      : 'No Disorderly Studio settings have been published yet.';
+    document.getElementById('apply-all-btn').style.display = n ? '' : 'none';
+  } else {
+    const m = Object.keys(calibrations).length;
+    note.textContent = m
+      ? `Using your own tuning (${m} pencil${m === 1 ? '' : 's'} calibrated).`
+      : 'Using your own tuning. Tap a match below to calibrate it to your swatches.';
+  }
+}
+
+// Copy the studio's preset for the pencil currently open in the cal panel.
+function copyOnePresetToMine() {
+  if (!calTarget) return;
+  const key = calTarget.brandName + ':' + calTarget.pencil[0];
+  const preset = DS_PRESETS[key];
+  if (!preset) { closeCal(); return; }
+  calibrations[key] = { r: preset.r, g: preset.g, b: preset.b };
+  try { localStorage.setItem('ds_calibrations', JSON.stringify(calibrations)); } catch(e) {}
+  closeCal();
+  if (lastR !== null) pickColor(lastR, lastG, lastB);
+}
+
+// Copy ALL studio presets into the user's own settings at once.
+function applyAllPresets() {
+  const n = presetCount();
+  if (!n) return;
+  if (!confirm(`Copy all ${n} Disorderly Studio settings into your own? This replaces your current tuning for those pencils.`)) return;
+  for (const key in DS_PRESETS) {
+    calibrations[key] = { r: DS_PRESETS[key].r, g: DS_PRESETS[key].g, b: DS_PRESETS[key].b };
+  }
+  try { localStorage.setItem('ds_calibrations', JSON.stringify(calibrations)); } catch(e) {}
+  setCalSource('mine'); // flip back so they see their now-updated settings
+}
+
+// Download the user's own calibrations as a JSON file (for backup, and so the
+// studio's settings can be published into DS_PRESETS above).
+function exportCalibrations() {
+  const keys = Object.keys(calibrations);
+  if (!keys.length) {
+    alert('You have not calibrated any pencils yet. Tune a few first, then export.');
+    return;
+  }
+  const blob = new Blob([JSON.stringify(calibrations, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'ds-my-settings.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 
 // ─── BACKGROUND TOGGLE ───────────────────────────────────────────────────────
 document.getElementById('bg-toggle').addEventListener('click', function(e) {
