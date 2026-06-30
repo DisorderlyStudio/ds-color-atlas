@@ -1015,6 +1015,18 @@
   html[data-view="phone"] .panel-section.collapsible.collapsed > *:not(.panel-label) {
     display: none;
   }
+
+  /* Smaller, finger-appropriate tap marker on touch (the desktop ring is huge). */
+  html[data-view="phone"] .ch-ring,
+  html[data-view="ipad"] .ch-ring { width: 28px; height: 28px; }
+
+  /* Export moves into the ⋯ menu on touch layouts to declutter the panel.
+     On desktop it stays in the side panel; the menu copy is hidden there. */
+  .menu-only { display: none; }
+  html[data-view="phone"] .toolbar-extra .menu-only,
+  html[data-view="ipad"] .toolbar-extra .menu-only { display: block; width: 100%; }
+  html[data-view="phone"] #export-btn,
+  html[data-view="ipad"] #export-btn { display: none !important; }
   .source-note {
     font-size: 0.62rem;
     color: var(--text-secondary);
@@ -1084,6 +1096,7 @@
             <span class="remember-toggle-label">Remember image</span>
             <div class="remember-toggle" id="remember-toggle"></div>
           </div>
+          <button class="toolbar-btn menu-only" id="export-btn-m" onclick="exportCalibrations()">Export my settings</button>
         </div>
       </div>
     </div>
@@ -1118,7 +1131,7 @@
       </div>
 
       <!-- Brand selector -->
-      <div class="panel-section collapsible">
+      <div class="panel-section collapsible collapsed">
         <div class="panel-label">Select your brands</div>
         <div class="brand-dropdown-wrapper">
           <button class="brand-dropdown-btn" id="brand-dropdown-btn">
@@ -1142,7 +1155,7 @@
       </div>
 
       <!-- Target color -->
-      <div class="panel-section">
+      <div class="panel-section collapsible">
         <div class="panel-label">Selected color</div>
         <div class="target-swatch" id="target-swatch"></div>
         <div class="target-info" id="target-info">Tap your image to pick a color</div>
