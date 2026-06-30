@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>D.S. Color Compass — Disorderly Studio</title>
 <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -27,6 +27,7 @@
     background: var(--bg-panel);
     color: #1a1a1a;
     min-height: 100vh;
+    min-height: 100dvh;
     overflow: hidden;
     border-bottom: 3px solid #000000;
   }
@@ -35,6 +36,7 @@
     display: grid;
     grid-template-columns: 1fr 420px;
     height: 100vh;
+    height: 100dvh;
   }
 
   /* ── IMAGE AREA (stays dark for colour accuracy) ── */
@@ -46,6 +48,7 @@
     justify-content: center;
     overflow: hidden;
     cursor: default;
+    touch-action: none;
   }
 
   .image-area.has-image {
@@ -810,11 +813,26 @@
     top: 72px;
   }
 
-  /* Slightly larger touch targets throughout the toolbar and panel controls,
-     since finger-precision is much lower than mouse-precision. */
-  html[data-view="ipad"] .toolbar-btn,
-  html[data-view="ipad"] .remember-toggle {
+  /* Slightly larger touch targets throughout the toolbar, since finger
+     precision is much lower than mouse precision. */
+  html[data-view="ipad"] .toolbar-btn {
     min-height: 34px;
+  }
+
+  /* The remember-image control is a fixed-aspect pill switch. A blanket
+     min-height (as the buttons get) would stretch it vertically into a
+     malformed circle, so instead scale the whole switch up proportionally
+     for touch — pill, knob, and the knob's "on" travel all together. */
+  html[data-view="ipad"] .remember-toggle {
+    width: 46px;
+    height: 26px;
+  }
+  html[data-view="ipad"] .remember-toggle::after {
+    width: 20px;
+    height: 20px;
+  }
+  html[data-view="ipad"] .remember-toggle.on::after {
+    transform: translateX(20px);
   }
 
 </style>
@@ -2603,6 +2621,51 @@ imageArea.addEventListener('touchend', function(e) {
   }
 });
 
+// ─── PINCH-TO-ZOOM (touch) ─────────────────────────────────────────────────
+// Two fingers map straight onto the same zoomAt() the +/- buttons and mouse
+// wheel use, so zoom behaviour is identical across every input method. Page-
+// level zoom is turned off in the viewport meta, so this is the ONLY zoom on
+// touch — previously two-finger gestures were ignored here and fell through to
+// the browser, which zoomed the whole page (and pushed the side panel off).
+let pinchActive = false;
+let pinchStartDist = 0;
+let pinchStartZoom = 1;
+
+function touchDist(a, b) {
+  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+}
+
+imageArea.addEventListener('touchstart', function(e) {
+  if (!imgData) return;
+  if (e.touches.length === 2) {
+    // A second finger means we're pinching, not panning — cancel any pan.
+    isPanning = false;
+    touchPanId = null;
+    pinchActive = true;
+    pinchStartDist = touchDist(e.touches[0], e.touches[1]);
+    pinchStartZoom = zoomLevel;
+    [chRing, chH, chV, chDot].forEach(el => el.style.display = 'none');
+  }
+}, { passive: true });
+
+imageArea.addEventListener('touchmove', function(e) {
+  if (!pinchActive || e.touches.length < 2 || pinchStartDist <= 0) return;
+  e.preventDefault();
+  const dist = touchDist(e.touches[0], e.touches[1]);
+  const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+  const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+  zoomAt(pinchStartZoom * (dist / pinchStartDist), midX, midY);
+}, { passive: false });
+
+imageArea.addEventListener('touchend', function(e) {
+  if (pinchActive && e.touches.length < 2) {
+    pinchActive = false;
+    // Suppress the tap-to-sample that would otherwise fire as fingers lift,
+    // reusing the same one-tick panMoved guard the pan gesture uses.
+    panMoved = true;
+    setTimeout(() => { panMoved = false; }, 0);
+  }
+});
 
 // ─── CROSSHAIR ───────────────────────────────────────────────────────────────
 // Decorative ring/lines overlay shown alongside the real system cursor
