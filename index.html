@@ -1,0 +1,2847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>D.S. Color Compass — Disorderly Studio</title>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ── COLOUR TOKENS ── */
+  :root {
+    --bg-panel:      #ffffff;
+    --bg-panel-alt:  #f5f5f5;
+    --border:        #e0dbd8;
+    --text-primary:  #1a1a1a;
+    --text-secondary:#222222;
+    --text-muted:    #555555;
+    --accent:        #8050AA;   /* purple from site */
+    --accent2:       #EC6FA3;   /* pink from site */
+    --accent-light:  rgba(128,80,170,0.10);
+    --img-bg:        #1a1818;   /* dark image canvas */
+  }
+
+  body {
+    font-family: 'Quicksand', sans-serif;
+    background: var(--bg-panel);
+    color: #1a1a1a;
+    min-height: 100vh;
+    overflow: hidden;
+    border-bottom: 3px solid #000000;
+  }
+
+  .main {
+    display: grid;
+    grid-template-columns: 1fr 420px;
+    height: 100vh;
+  }
+
+  /* ── IMAGE AREA (stays dark for colour accuracy) ── */
+  .image-area {
+    position: relative;
+    background: var(--img-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    cursor: default;
+  }
+
+  .image-area.has-image {
+    cursor: default;
+  }
+
+  .image-area.has-image.panning {
+    cursor: grabbing;
+  }
+
+  /* Over the canvas itself, the small custom ring/dot overlay takes over as
+     the pointer (so it reads precisely instead of a generic OS glyph).
+     #canvas's own cursor:none rule below handles this — it only applies
+     while actually hovering the canvas, with the normal OS pointer as
+     a fallback everywhere else in the image area (toolbar, letterboxed
+     edges), so the cursor can never end up invisible everywhere at once. */
+
+  /* image toolbar */
+  .image-toolbar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 38px;
+    background: rgba(0,0,0,0.55);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1rem;
+    z-index: 10;
+    gap: 0.75rem;
+  }
+
+  .image-area.light-bg .image-toolbar {
+    background: rgba(255,255,255,0.75);
+  }
+
+  .toolbar-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.8);
+  }
+
+  .image-area.light-bg .toolbar-label { color: #333; }
+
+  .toolbar-btn {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.35);
+    color: rgba(255,255,255,0.9);
+    font-family: 'Quicksand', sans-serif;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.28rem 0.75rem;
+    cursor: pointer;
+    font-weight: 700;
+    transition: all 0.15s;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .toolbar-btn:hover { background: rgba(255,255,255,0.28); }
+  .image-area.light-bg .toolbar-btn {
+    background: rgba(0,0,0,0.08);
+    border-color: rgba(0,0,0,0.2);
+    color: #222;
+  }
+  .image-area.light-bg .toolbar-btn:hover { background: rgba(0,0,0,0.15); }
+  .image-area.light-bg { background: #f0ede8; }
+  .image-area.light-bg .upload-prompt { color: #222222; }
+  .image-area.light-bg .upload-prompt p { color: #222222; }
+  .image-area.light-bg .upload-btn { border-color: #555; color: #333; }
+
+  .upload-prompt {
+    text-align: center;
+    color: #ffffff;
+    pointer-events: none;
+    margin-top: 38px;
+  }
+
+  .upload-prompt p {
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 1.25rem;
+    color: #ffffff;
+    font-weight: 700;
+  }
+
+  .upload-btn {
+    padding: 0.55rem 1.3rem;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.5);
+    color: #ffffff;
+    font-family: 'Quicksand', sans-serif;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    pointer-events: all;
+    transition: border-color 0.2s, color 0.2s;
+    display: block;
+    margin: 0 auto;
+  }
+
+  .upload-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .canvas-viewport {
+    position: absolute;
+    top: 38px; left: 0; right: 0; bottom: 0;
+    overflow: auto;
+    scrollbar-width: auto;
+    scrollbar-color: rgba(255,255,255,0.55) rgba(255,255,255,0.08);
+    pointer-events: none;
+  }
+
+  .image-area.has-image .canvas-viewport {
+    pointer-events: all;
+  }
+
+  /* The sizer is always at least as large as the viewport, and JS centers
+     the canvas inside it via margins. This makes scrollTop/scrollLeft = 0
+     unambiguously the true top-left of the content at every zoom level,
+     sidestepping the cross-browser inconsistencies of centering an
+     overflowing flex child directly (which made the true top/left of a
+     zoomed-in image unreachable in some browsers). */
+  .canvas-sizer {
+    position: relative;
+  }
+
+  /* Make the scrollbar a real, visible, easy-to-grab handle for navigating
+     when zoomed in, instead of the thin near-invisible default. */
+  .canvas-viewport::-webkit-scrollbar {
+    width: 14px;
+    height: 14px;
+  }
+  .canvas-viewport::-webkit-scrollbar-track {
+    background: rgba(255,255,255,0.08);
+  }
+  .canvas-viewport::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.55);
+    border-radius: 7px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+  .canvas-viewport::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.8);
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+  .canvas-viewport::-webkit-scrollbar-corner {
+    background: rgba(255,255,255,0.08);
+  }
+
+  .image-area.light-bg .canvas-viewport {
+    scrollbar-color: rgba(0,0,0,0.4) rgba(0,0,0,0.06);
+  }
+  .image-area.light-bg .canvas-viewport::-webkit-scrollbar-track {
+    background: rgba(0,0,0,0.06);
+  }
+  .image-area.light-bg .canvas-viewport::-webkit-scrollbar-thumb {
+    background: rgba(0,0,0,0.4);
+  }
+  .image-area.light-bg .canvas-viewport::-webkit-scrollbar-thumb:hover {
+    background: rgba(0,0,0,0.6);
+  }
+
+  #canvas { display: none; cursor: none; position: absolute; }
+  .image-area.panning #canvas { cursor: grabbing; }
+
+  .zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-right: 0.4rem;
+    padding-right: 0.6rem;
+    border-right: 1px solid rgba(255,255,255,0.25);
+  }
+
+  .image-area.light-bg .zoom-controls { border-right-color: rgba(0,0,0,0.18); }
+
+  .zoom-btn {
+    padding: 0.28rem 0.6rem !important;
+    font-size: 0.85rem !important;
+    line-height: 1;
+    min-width: 1.6rem;
+  }
+
+  .zoom-pct {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: rgba(255,255,255,0.8);
+    min-width: 2.6rem;
+    text-align: center;
+  }
+
+  .image-area.light-bg .zoom-pct { color: #333; }
+
+  .ch-ring {
+    position: absolute;
+    width: 120px; height: 120px;
+    border: 1px solid rgba(0,0,0,0.9);
+    border-radius: 50%;
+    pointer-events: none;
+    display: none;
+    transform: translate(-50%,-50%);
+    box-shadow: 0 0 0 0.5px rgba(255,255,255,0.8);
+  }
+
+  .ch-h {
+    position: absolute;
+    width: 120px; height: 0.75px;
+    background: rgba(0,0,0,0.9);
+    pointer-events: none;
+    display: none;
+    transform: translate(-50%,-50%);
+    box-shadow: 0 0.5px 0 rgba(255,255,255,0.6), 0 -0.5px 0 rgba(255,255,255,0.6);
+  }
+
+  .ch-v {
+    position: absolute;
+    width: 0.75px; height: 120px;
+    background: rgba(0,0,0,0.9);
+    pointer-events: none;
+    display: none;
+    transform: translate(-50%,-50%);
+    box-shadow: 0.5px 0 0 rgba(255,255,255,0.6), -0.5px 0 0 rgba(255,255,255,0.6);
+  }
+
+  .ch-dot {
+    position: absolute;
+    width: 4px; height: 4px;
+    background: rgba(0,0,0,0.9);
+    border-radius: 50%;
+    pointer-events: none;
+    display: none;
+    transform: translate(-50%,-50%);
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.8);
+  }
+
+  /* ── RIGHT PANEL ── */
+  .panel {
+    background: var(--bg-panel);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .panel-top { flex-shrink: 0; }
+
+  .panel-section {
+    padding: 1rem 1.3rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .panel-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #000000;
+    margin-bottom: 0.65rem;
+    font-weight: 700;
+  }
+
+  /* ── BRAND DROPDOWN ── */
+  .brand-dropdown-wrapper { position: relative; }
+
+  .brand-dropdown-btn {
+    width: 100%;
+    background: #fff;
+    border: 1px solid var(--border);
+    color: #1a1a1a;
+    font-family: 'Quicksand', sans-serif;
+    font-size: 0.8rem;
+    padding: 0.45rem 0.75rem;
+    cursor: pointer;
+    text-align: left;
+    letter-spacing: 0.04em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: border-color 0.2s;
+  }
+
+  .brand-dropdown-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .brand-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0; right: 0;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-top: none;
+    z-index: 100;
+    max-height: 320px;
+    overflow-y: auto;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  }
+
+  .brand-dropdown-menu.open { display: block; }
+
+  .brand-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    cursor: pointer;
+    padding: 0.4rem 0.75rem;
+  }
+
+  .brand-item:hover { background: var(--accent-light); }
+
+  .brand-item input[type=checkbox] {
+    width: 14px; height: 14px;
+    accent-color: var(--accent);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .brand-item label {
+    font-size: 0.8rem;
+    color: #1a1a1a;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+  }
+
+  .brand-item label span {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    margin-left: 0.3rem;
+  }
+
+  .brand-group-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    cursor: pointer;
+    padding: 0.45rem 0.75rem;
+    background: var(--bg-panel-alt);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .brand-group-toggle:first-child { border-top: none; }
+
+  .brand-group-toggle:hover { background: var(--accent-light); }
+
+  .brand-group-name {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #1a1a1a;
+  }
+
+  .brand-group-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .brand-group-count {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+  }
+
+  .brand-group-arrow {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    transition: transform 0.15s;
+    display: inline-block;
+  }
+
+  .brand-group-toggle.open .brand-group-arrow {
+    transform: rotate(90deg);
+  }
+
+  .brand-group-items {
+    display: none;
+  }
+
+  .brand-group-items.open {
+    display: block;
+  }
+
+  .brand-group-items .brand-item {
+    padding-left: 1.5rem;
+  }
+
+  .add-brands-section {
+    border-top: 2px solid var(--border);
+  }
+
+  .add-brands-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    cursor: pointer;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-panel-alt);
+  }
+
+  .add-brands-toggle:hover { background: var(--accent-light); }
+
+  .add-brands-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+  }
+
+  .empty-collection-note {
+    padding: 0.7rem 0.75rem;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+
+  /* ── SLIDER ── */
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .slider-label {
+    font-size: 0.72rem;
+    color: #222222;
+    white-space: nowrap;
+    font-weight: 700;
+  }
+
+  input[type=range] {
+    flex: 1;
+    height: 2px;
+    background: linear-gradient(to right, #4a7ab5, #ccc, #c8714a);
+    outline: none;
+    border: none;
+    cursor: pointer;
+    -webkit-appearance: none;
+  }
+
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+  }
+
+  /* ── TARGET SWATCH ── */
+  .target-swatch {
+    width: 100%;
+    height: 44px;
+    border-radius: 3px;
+    background: var(--bg-panel-alt);
+    margin-bottom: 0.35rem;
+    border: 1.5px solid var(--border);
+  }
+
+  .target-info {
+    font-size: 0.78rem;
+    color: #111111;
+    font-weight: 700;
+  }
+
+  /* ── RESULTS SCROLL ── */
+  .results-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem 0;
+    background: var(--bg-panel);
+  }
+
+  .results-scroll::-webkit-scrollbar { width: 4px; }
+  .results-scroll::-webkit-scrollbar-track { background: var(--bg-panel); }
+  .results-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ── BRAND GROUP ── */
+  .brand-group { margin-bottom: 0.25rem; }
+
+  .brand-group-header {
+    padding: 0.5rem 1.3rem 0.3rem;
+    font-size: 0.58rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #000000;
+    border-bottom: 1px solid var(--border);
+    font-weight: 700;
+  }
+
+  .match {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.65rem 1.3rem;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+
+  .match:last-child { border-bottom: none; }
+  .match:hover { background: var(--accent-light); }
+
+  .match-num {
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    width: 10px;
+    flex-shrink: 0;
+  }
+
+  .match-swatch {
+    width: 42px; height: 42px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    border: 2px solid #999;
+    outline: 1px solid rgba(0,0,0,0.25);
+    position: relative;
+  }
+
+  .cal-dot {
+    position: absolute;
+    top: -3px; right: -3px;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--accent2);
+    border: 1px solid #fff;
+  }
+
+  .match-info { flex: 1; min-width: 0; }
+
+  .match-code {
+    font-size: 0.78rem;
+    color: #000000;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.15rem;
+    font-weight: 700;
+  }
+
+  .match-name {
+    font-size: 0.88rem;
+    color: #1a1a1a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 600;
+  }
+
+  .match-pct {
+    font-size: 0.75rem;
+    color: #333;
+    flex-shrink: 0;
+    text-align: right;
+    font-weight: 700;
+  }
+
+  .empty-results {
+    text-align: center;
+    padding: 2.5rem 1.3rem;
+    color: #444444;
+    font-size: 0.82rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    line-height: 1.8;
+    font-weight: 700;
+  }
+
+  /* ── CALIBRATION PANEL ── */
+  .cal-panel {
+    display: none;
+    position: fixed;
+    bottom: 0; right: 0;
+    width: 360px;
+    background: #fff;
+    border-top: 1px solid var(--border);
+    border-left: 1px solid var(--border);
+    padding: 1.2rem 1.3rem;
+    z-index: 100;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
+  }
+
+  .cal-panel.open { display: block; }
+
+  .cal-title {
+    font-size: 0.62rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.9rem;
+    font-weight: 600;
+  }
+
+  .cal-swatches {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 0.9rem;
+    align-items: flex-start;
+  }
+
+  .cal-swatch-wrap { text-align: center; }
+
+  .cal-swatch {
+    width: 52px; height: 60px;
+    border-radius: 3px;
+    border: 2px solid #999;
+    outline: 1px solid rgba(0,0,0,0.25);
+    margin-bottom: 0.25rem;
+  }
+
+  .cal-swatch-label {
+    font-size: 0.58rem;
+    color: var(--text-muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .cal-arrow { color: var(--border); font-size: 1.1rem; margin-top: 16px; }
+
+  .cal-sliders { margin-bottom: 0.9rem; }
+
+  .cal-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.45rem;
+  }
+
+  .cal-ch {
+    font-size: 0.6rem;
+    width: 10px;
+    flex-shrink: 0;
+    font-weight: bold;
+    color: #1a1a1a;
+  }
+
+  .cal-val {
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    width: 28px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .cal-actions {
+    display: flex;
+    gap: 0.6rem;
+  }
+
+  .cal-btn {
+    flex: 1;
+    padding: 0.45rem;
+    font-family: 'Quicksand', sans-serif;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    transition: all 0.15s;
+  }
+
+  .cal-btn:hover { border-color: var(--text-secondary); color: var(--text-primary); }
+  .cal-btn.save { border-color: var(--accent); color: var(--accent); }
+  .cal-btn.save:hover { background: var(--accent-light); }
+
+  #file-input { display: none; }
+
+  /* Remember-image toggle switch */
+  .remember-toggle-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .remember-toggle-label {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.8);
+    white-space: nowrap;
+  }
+  .image-area.light-bg .remember-toggle-label { color: #333; }
+  .remember-toggle {
+    position: relative;
+    width: 34px;
+    height: 18px;
+    border: 1px solid rgba(255,255,255,0.35);
+    background: rgba(255,255,255,0.15);
+    border-radius: 999px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .image-area.light-bg .remember-toggle {
+    border-color: rgba(0,0,0,0.3);
+    background: rgba(0,0,0,0.08);
+  }
+  .remember-toggle::after {
+    content: '';
+    position: absolute;
+    top: 1px; left: 1px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.9);
+    transition: transform 0.15s;
+  }
+  .image-area.light-bg .remember-toggle::after {
+    background: #555;
+  }
+  .remember-toggle.on {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .remember-toggle.on::after {
+    transform: translateX(16px);
+    background: #fff;
+  }
+
+  .no-brands {
+    text-align: center;
+    padding: 1rem 1.3rem;
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     IPAD VIEW — activated via ?view=ipad (see view-detection script above).
+     Desktop layout is completely untouched; these rules only apply when
+     html[data-view="ipad"] is present, so the default/no-param case keeps
+     working exactly as it always has.
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  /* Panel narrows instead of staying a fixed 420px, which was eating too
+     much of the image area on iPad-width screens (this was the user's
+     reported "image gets really skinny in portrait" symptom). Image area
+     gets the rest via 1fr. */
+  html[data-view="ipad"] .main {
+    grid-template-columns: 1fr 320px;
+  }
+
+  /* Toolbar buttons wrap onto a second line instead of being forced into
+     one cramped row, since the available width is much narrower than the
+     desktop window this toolbar was originally sized for. */
+  html[data-view="ipad"] .image-toolbar {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 38px;
+    padding: 0.4rem 0.75rem;
+    row-gap: 0.4rem;
+  }
+
+  /* When the toolbar wraps to two lines, the canvas-viewport (which is
+     absolutely positioned with a fixed top:38px to clear a single-line
+     toolbar) needs more clearance. 72px comfortably fits two wrapped rows
+     of toolbar content at this padding/button size. */
+  html[data-view="ipad"] .canvas-viewport {
+    top: 72px;
+  }
+
+  /* Slightly larger touch targets throughout the toolbar and panel controls,
+     since finger-precision is much lower than mouse-precision. */
+  html[data-view="ipad"] .toolbar-btn,
+  html[data-view="ipad"] .remember-toggle {
+    min-height: 34px;
+  }
+
+</style>
+</head>
+<body>
+<script>
+  // ─── VIEW DETECTION (runs immediately, before paint) ─────────────────────────
+  // Determines which layout variant to render: desktop (default), ipad, or phone.
+  // Controlled via URL query param so each device can be given/bookmarked its
+  // own link, e.g. DS-Color-Compass.html?view=ipad — while all three variants
+  // share the exact same underlying file, pencil data, and localStorage on
+  // that device. Falls back to "desktop" if the param is missing or invalid,
+  // so any existing links/embeds with no param keep working exactly as before.
+  (function() {
+    const params = new URLSearchParams(window.location.search);
+    let view = (params.get('view') || 'desktop').toLowerCase();
+    if (view !== 'desktop' && view !== 'ipad' && view !== 'phone') view = 'desktop';
+    document.documentElement.setAttribute('data-view', view);
+  })();
+</script>
+
+
+
+<div class="main">
+
+  <div class="image-area" id="image-area">
+    <div class="image-toolbar">
+      <span class="toolbar-label">D.S. Color Compass</span>
+      <div style="display:flex;gap:0.5rem;align-items:center;">
+        <div class="zoom-controls" id="zoom-controls">
+          <button class="toolbar-btn zoom-btn" id="zoom-out-btn">−</button>
+          <span class="zoom-pct" id="zoom-pct">100%</span>
+          <button class="toolbar-btn zoom-btn" id="zoom-in-btn">+</button>
+          <button class="toolbar-btn" id="zoom-reset-btn">Reset Zoom</button>
+        </div>
+        <button class="toolbar-btn" id="reset-btn">New Image</button>
+        <button class="toolbar-btn" id="bg-toggle">Dark / Light</button>
+        <div class="remember-toggle-wrap">
+          <span class="remember-toggle-label">Remember image</span>
+          <div class="remember-toggle" id="remember-toggle"></div>
+        </div>
+      </div>
+    </div>
+    <div class="upload-prompt" id="upload-prompt">
+      <p>Upload a reference photo</p>
+      <button class="upload-btn" onclick="document.getElementById('file-input').click()">Choose image</button>
+    </div>
+    <div class="canvas-viewport" id="canvas-viewport">
+      <div class="canvas-sizer" id="canvas-sizer">
+        <canvas id="canvas"></canvas>
+      </div>
+    </div>
+    <div class="ch-ring" id="ch-ring"></div>
+    <div class="ch-h" id="ch-h"></div>
+    <div class="ch-v" id="ch-v"></div>
+    <div class="ch-dot" id="ch-dot"></div>
+    <input type="file" id="file-input" accept="image/*">
+  </div>
+
+  <div class="panel">
+    <div class="panel-top">
+
+      <!-- Brand selector -->
+      <div class="panel-section">
+        <div class="panel-label">Select your brands</div>
+        <div class="brand-dropdown-wrapper">
+          <button class="brand-dropdown-btn" id="brand-dropdown-btn">
+            <span id="brand-dropdown-label">Choose brands…</span>
+            <span>▾</span>
+          </button>
+          <div class="brand-dropdown-menu" id="brand-dropdown-menu">
+            <div id="brand-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Global shift -->
+      <div class="panel-section">
+        <div class="panel-label">Global warm / cool</div>
+        <div class="slider-row">
+          <span class="slider-label">Cool</span>
+          <input type="range" id="global-slider" min="-30" max="30" value="0" step="1">
+          <span class="slider-label">Warm</span>
+        </div>
+      </div>
+
+      <!-- Target color -->
+      <div class="panel-section">
+        <div class="panel-label">Selected color</div>
+        <div class="target-swatch" id="target-swatch"></div>
+        <div class="target-info" id="target-info">Tap your image to pick a color</div>
+      </div>
+
+      <div class="panel-section" style="padding-bottom:0.5rem;">
+        <div class="panel-label">Closest matches — tap any to calibrate</div>
+      </div>
+
+    </div>
+
+    <!-- Scrollable results -->
+    <div class="results-scroll" id="results-scroll">
+      <div class="empty-results">Select brands above<br>then tap your image</div>
+    </div>
+  </div>
+</div>
+
+<!-- CALIBRATION PANEL -->
+<div class="cal-panel" id="cal-panel">
+  <div class="cal-title" id="cal-title">Calibrate pencil</div>
+  <div class="cal-swatches">
+    <div class="cal-swatch-wrap">
+      <div class="cal-swatch" id="cal-app-swatch"></div>
+      <div class="cal-swatch-label">App color</div>
+    </div>
+    <div class="cal-arrow">→</div>
+    <div class="cal-swatch-wrap">
+      <div class="cal-swatch" id="cal-adj-swatch"></div>
+      <div class="cal-swatch-label">Your version</div>
+    </div>
+  </div>
+  <div class="cal-sliders">
+    <div class="cal-row">
+      <span class="cal-ch" style="color:#e06060">R</span>
+      <input type="range" id="cal-r" min="-80" max="80" value="0" step="1">
+      <span class="cal-val" id="cal-r-val">0</span>
+    </div>
+    <div class="cal-row">
+      <span class="cal-ch" style="color:#60c060">G</span>
+      <input type="range" id="cal-g" min="-80" max="80" value="0" step="1">
+      <span class="cal-val" id="cal-g-val">0</span>
+    </div>
+    <div class="cal-row">
+      <span class="cal-ch" style="color:#6090e0">B</span>
+      <input type="range" id="cal-b" min="-80" max="80" value="0" step="1">
+      <span class="cal-val" id="cal-b-val">0</span>
+    </div>
+  </div>
+  <div class="cal-actions">
+    <button class="cal-btn" onclick="resetCal()">Reset</button>
+    <button class="cal-btn" onclick="closeCal()">Cancel</button>
+    <button class="cal-btn save" onclick="saveCal()">Save pencil</button>
+  </div>
+</div>
+
+<script>
+// ─── PENCIL DATABASE ─────────────────────────────────────────────────────────
+const BRANDS = {
+    "Prismacolor Premier": {
+    short: "Prismacolor",
+    pencils: [
+      ["PC103","Cerulean Blue",1,107,176],
+      ["PC105","Cobalt Turquoise",2,100,111],
+      ["PC109","Prussian Green",79,99,82],
+      ["PC118","Cadmium Orange Hue",209,106,78],
+      ["PC120","Sap Green Light",145,170,134],
+      ["PC122","Permanent Red",212,80,81],
+      ["PC132","Dioxazine Purple Hue",67,59,110],
+      ["PC133","Cobalt Blue Hue",51,94,197],
+      ["PC140","Eggshell",241,215,167],
+      ["PC195","Pomegranate",164,48,78],
+      ["PC208","Indanthrone Blue",45,52,104],
+      ["PC289","Grey Green Light",226,231,220],
+      ["PC901","Indigo Blue",36,55,95],
+      ["PC902","Ultramarine",56,69,162],
+      ["PC903","True Blue",1,129,197],
+      ["PC904","Light Cerulean Blue",98,158,217],
+      ["PC905","Sky Aquamarine",1,142,160],
+      ["PC906","Copenhagen Blue",3,83,148],
+      ["PC907","Peacock Green",26,81,79],
+      ["PC908","Dark Green",51,85,68],
+      ["PC909","Grass Green",20,125,90],
+      ["PC910","True Green",102,195,139],
+      ["PC911","Olive Green",81,104,73],
+      ["PC912","Apple Green",124,164,86],
+      ["PC913","Spring Green",148,203,92],
+      ["PC914","Cream",245,233,189],
+      ["PC915","Lemon Yellow",237,230,113],
+      ["PC916","Canary Yellow",249,221,59],
+      ["PC917","Sunburst Yellow",251,186,70],
+      ["PC918","Orange",254,133,77],
+      ["PC919","Non-Photo Blue",73,173,225],
+      ["PC920","Light Green",154,218,175],
+      ["PC921","Pale Vermillion",231,108,76],
+      ["PC922","Poppy Red",219,73,59],
+      ["PC923","Scarlet Lake",192,57,58],
+      ["PC924","Crimson Red",182,60,62],
+      ["PC925","Crimson Lake",157,49,54],
+      ["PC926","Carmine Red",218,93,101],
+      ["PC927","Light Peach",234,200,188],
+      ["PC928","Blush Pink",244,171,175],
+      ["PC929","Pink",234,127,156],
+      ["PC930","Magenta",187,69,100],
+      ["PC931","Dark Purple",86,57,85],
+      ["PC932","Violet",86,66,133],
+      ["PC933","Violet Blue",53,56,134],
+      ["PC934","Lavender",194,130,218],
+      ["PC935","Black",57,59,63],
+      ["PC936","Slate Grey",103,128,148],
+      ["PC937","Tuscan Red",115,61,64],
+      ["PC938","White",223,232,224],
+      ["PC939","Peach",228,173,152],
+      ["PC940","Sand",239,195,107],
+      ["PC941","Light Umber",131,108,86],
+      ["PC942","Yellow Ochre",224,173,89],
+      ["PC943","Burnt Ochre",168,102,80],
+      ["PC944","Terra Cotta",140,78,68],
+      ["PC945","Sienna Brown",140,97,78],
+      ["PC946","Dark Brown",100,83,74],
+      ["PC947","Dark Umber",77,62,59],
+      ["PC948","Sepia",89,83,78],
+      ["PC949","Silver",157,159,161],
+      ["PC950","Metallic Gold",145,124,94],
+      ["PC956","Lilac",155,120,209],
+      ["PC988","Marine Green",93,99,66],
+      ["PC989","Chartreuse",189,208,52],
+      ["PC992","Light Aqua",84,185,189],
+      ["PC993","Hot Pink",222,124,174],
+      ["PC994","Process Red",200,65,133],
+      ["PC995","Mulberry",156,63,129],
+      ["PC996","Black Grape",75,66,85],
+      ["PC997","Beige",240,206,169],
+      ["PC1001","Salmon Pink",251,176,144],
+      ["PC1002","Yellowed Orange",252,164,73],
+      ["PC1003","Spanish Orange",252,188,66],
+      ["PC1004","Yellow Chartreuse",222,234,111],
+      ["PC1005","Lime Peel",172,173,84],
+      ["PC1006","Parrot Green",1,151,135],
+      ["PC1007","Imperial Violet",83,82,162],
+      ["PC1008","Parma Violet",125,105,177],
+      ["PC1009","Dahlia Purple",96,51,91],
+      ["PC1011","Deco Yellow",248,234,126],
+      ["PC1012","Jasmine",237,205,128],
+      ["PC1013","Deco Peach",241,199,193],
+      ["PC1014","Deco Pink",241,199,209],
+      ["PC1017","Clay Rose",160,135,146],
+      ["PC1018","Pink Rose",221,179,189],
+      ["PC1019","Rosy Beige",194,172,174],
+      ["PC1020","Celadon Green",145,166,155],
+      ["PC1021","Jade Green",147,169,166],
+      ["PC1022","Mediterranean Blue",66,114,160],
+      ["PC1023","Cloud Blue",188,203,227],
+      ["PC1024","Blue Slate",130,172,227],
+      ["PC1025","Periwinkle",114,135,172],
+      ["PC1026","Greyed Lavender",175,163,183],
+      ["PC1027","Peacock Blue",1,103,147],
+      ["PC1028","Bronze",153,128,81],
+      ["PC1029","Mahogany Red",136,64,88],
+      ["PC1030","Raspberry",141,57,73],
+      ["PC1031","Henna",143,78,79],
+      ["PC1032","Pumpkin Orange",187,91,61],
+      ["PC1033","Mineral Orange",205,131,88],
+      ["PC1034","Goldenrod",206,145,82],
+      ["PC1035","Neon Yellow",243,254,112],
+      ["PC1036","Neon Orange",245,195,80],
+      ["PC1038","Neon Pink",251,80,160],
+      ["PC1040","Electric Blue",96,186,228],
+      ["PC1050","10% Warm Grey",207,207,206],
+      ["PC1051","20% Warm Grey",171,169,172],
+      ["PC1052","30% Warm Grey",161,156,159],
+      ["PC1054","50% Warm Grey",106,107,112],
+      ["PC1056","70% Warm Grey",85,86,94],
+      ["PC1058","90% Warm Grey",69,70,76],
+      ["PC1059","10% Cool Grey",204,208,211],
+      ["PC1060","20% Cool Grey",190,196,200],
+      ["PC1061","30% Cool Grey",181,187,191],
+      ["PC1063","50% Cool Grey",137,146,153],
+      ["PC1065","70% Cool Grey",96,109,118],
+      ["PC1067","90% Cool Grey",57,60,66],
+      ["PC1068","10% French Grey",222,215,211],
+      ["PC1069","20% French Grey",195,189,186],
+      ["PC1070","30% French Grey",186,178,174],
+      ["PC1072","50% French Grey",138,133,128],
+      ["PC1074","70% French Grey",112,108,105],
+      ["PC1076","90% French Grey",89,84,82],
+      ["PC1077","Colorless Blender",248,248,248],
+      ["PC1078","Black Cherry",78,44,63],
+      ["PC1079","Blue Violet Lake",112,140,197],
+      ["PC1080","Beige Sienna",167,150,129],
+      ["PC1081","Chestnut",108,80,78],
+      ["PC1082","Chocolate",86,67,53],
+      ["PC1083","Putty Beige",199,193,176],
+      ["PC1084","Ginger Root",209,205,159],
+      ["PC1085","Peach Beige",211,199,168],
+      ["PC1086","Sky Blue Light",191,218,235],
+      ["PC1087","Powder Blue",184,205,234],
+      ["PC1088","Muted Turquoise",109,156,173],
+      ["PC1089","Pale Sage",197,209,172],
+      ["PC1090","Kelp Green",76,93,58],
+      ["PC1091","Green Ochre",102,102,74],
+      ["PC1092","Nectar",200,139,131],
+      ["PC1093","Seashell Pink",210,192,163],
+      ["PC1094","Sandbar Brown",119,105,79],
+      ["PC1095","Black Raspberry",88,63,62],
+      ["PC1096","Kelly Green",97,122,91],
+      ["PC1097","Moss Green",97,97,58],
+      ["PC1098","Artichoke",135,112,56],
+      ["PC1099","Espresso",80,72,69],
+      ["PC1100","China Blue",7,83,177],
+      ["PC1101","Denim Blue",9,72,138],
+      ["PC1102","Blue Lake",106,149,209],
+      ["PC1103","Caribbean Sea",125,157,205],
+      ["PC1104","Amethyst",175,125,190],
+      ["PC1105","Orchid",190,150,200],
+    ]
+  },
+    "Faber-Castell Polychromos": {
+    short: "Polychromos",
+    pencils: [
+      ["FC101","White",244,242,237],
+      ["FC102","Cream",246,228,150],
+      ["FC103","Ivory",246,235,204],
+      ["FC104","Light Yellow Glaze",244,243,116],
+      ["FC105","Light Cadmium Yellow",250,232,75],
+      ["FC106","Light Chrome Yellow",249,223,85],
+      ["FC107","Cadmium Yellow",255,221,61],
+      ["FC108","Dark Cadmium Yellow",255,195,54],
+      ["FC109","Dark Chrome Yellow",255,169,75],
+      ["FC110","Phthalo Blue",24,103,181],
+      ["FC111","Cadmium Orange",255,155,65],
+      ["FC112","Leaf Green",61,164,80],
+      ["FC113","Orange Glaze",252,132,60],
+      ["FC115","Dark Cadmium Orange",236,106,65],
+      ["FC117","Light Cadmium Red",230,92,64],
+      ["FC118","Scarlet Red",215,89,73],
+      ["FC119","Light Magenta",218,125,185],
+      ["FC120","Ultramarine",72,95,180],
+      ["FC121","Pale Geranium Lake",215,71,69],
+      ["FC123","Fuchsia",200,71,112],
+      ["FC124","Rose Carmine",214,99,114],
+      ["FC125","Middle Purple Pink",178,60,114],
+      ["FC126","Permanent Carmine",188,59,71],
+      ["FC127","Pink Carmine",195,66,89],
+      ["FC128","Light Purple Pink",218,91,128],
+      ["FC129","Pink Madder Lake",219,107,146],
+      ["FC130","Salmon",230,128,129],
+      ["FC131","Coral",221,122,119],
+      ["FC132","Beige Red",235,180,160],
+      ["FC133","Magenta",144,49,73],
+      ["FC134","Crimson",151,80,134],
+      ["FC135","Light Red-Violet",130,78,113],
+      ["FC136","Purple Violet",100,72,137],
+      ["FC137","Blue Violet",74,63,124],
+      ["FC138","Violet",118,83,147],
+      ["FC140","Light Ultramarine",97,136,221],
+      ["FC141","Delft Blue",65,61,115],
+      ["FC142","Madder",158,61,74],
+      ["FC143","Cobalt Blue",35,89,174],
+      ["FC144","Cobalt Blue-Greenish",41,79,145],
+      ["FC145","Light Phthalo Blue",57,148,216],
+      ["FC146","Sky Blue",126,163,227],
+      ["FC149","Bluish Turquoise",28,80,130],
+      ["FC151","Helioblue-Reddish",46,73,130],
+      ["FC152","Middle Phthalo Blue",33,130,205],
+      ["FC153","Cobalt Turquoise",10,103,137],
+      ["FC154","Light Cobalt Turquoise",74,185,206],
+      ["FC155","Helio Turquoise",38,93,111],
+      ["FC156","Cobalt Green",50,157,167],
+      ["FC157","Dark Indigo",63,71,85],
+      ["FC158","Deep Cobalt Green",50,83,89],
+      ["FC159","Hooker's Green",40,86,79],
+      ["FC160","Manganese Violet",115,73,128],
+      ["FC161","Phthalo Green",0,143,122],
+      ["FC162","Light Phthalo Green",45,181,128],
+      ["FC163","Emerald Green",0,149,103],
+      ["FC165","Juniper Green",59,84,75],
+      ["FC166","Grass Green",98,190,87],
+      ["FC167","Permanent Green Olive",72,103,71],
+      ["FC168","Earth Green Yellowish",123,145,77],
+      ["FC169","Caput Mortuum",113,75,72],
+      ["FC170","May Green",154,171,90],
+      ["FC171","Light Green",140,219,105],
+      ["FC172","Earth Green",121,137,119],
+      ["FC173","Olive Green Yellowish",83,86,65],
+      ["FC174","Chromium Green Opaque",82,94,74],
+      ["FC175","Dark Sepia",64,63,63],
+      ["FC176","Van Dyck Brown",84,73,68],
+      ["FC177","Walnut Brown",92,80,76],
+      ["FC178","Nougat",120,102,89],
+      ["FC179","Bistre",120,96,75],
+      ["FC180","Raw Umber",131,101,68],
+      ["FC181","Payne's Grey",67,70,76],
+      ["FC182","Brown Ochre",143,105,70],
+      ["FC183","Light Yellow Ochre",208,152,74],
+      ["FC184","Dark Naples Ochre",233,177,87],
+      ["FC185","Naples Yellow",241,196,88],
+      ["FC186","Terracotta",196,118,76],
+      ["FC187","Burnt Ochre",174,116,78],
+      ["FC188","Sanguine",172,97,72],
+      ["FC189","Cinnamon",199,137,119],
+      ["FC190","Venetian Red",175,100,87],
+      ["FC191","Pompeian Red",191,93,86],
+      ["FC192","Indian Red",135,77,73],
+      ["FC193","Burnt Carmine",125,70,78],
+      ["FC194","Red-Violet",102,60,77],
+      ["FC199","Black",55,56,57],
+      ["FC205","Cadmium Yellow Lemon",232,236,101],
+      ["FC217","Middle Cadmium Red",159,59,66],
+      ["FC219","Deep Scarlet Red",192,60,66],
+      ["FC223","Deep Red",189,58,64],
+      ["FC225","Dark Red",148,55,66],
+      ["FC226","Alizarin Crimson",181,54,72],
+      ["FC230","Cold Grey I",207,208,207],
+      ["FC231","Cold Grey II",178,181,182],
+      ["FC232","Cold Grey III",141,146,150],
+      ["FC233","Cold Grey IV",122,124,126],
+      ["FC234","Cold Grey V",87,91,94],
+      ["FC235","Cold Grey VI",76,77,79],
+      ["FC246","Prussian Blue",48,70,101],
+      ["FC247","Indanthrene Blue",60,69,107],
+      ["FC249","Mauve",68,57,105],
+      ["FC250","Gold",182,174,156],
+      ["FC251","Silver",148,151,155],
+      ["FC252","Copper",179,160,147],
+      ["FC263","Caput Mortuum Violet",103,73,75],
+      ["FC264","Dark Phthalo Green",25,112,95],
+      ["FC266","Permanent Green",52,112,61],
+      ["FC267","Pine Green",53,76,65],
+      ["FC268","Green Gold",176,142,67],
+      ["FC270","Warm Grey I",211,204,193],
+      ["FC271","Warm Grey II",187,180,169],
+      ["FC272","Warm Grey III",153,149,144],
+      ["FC273","Warm Grey IV",116,115,114],
+      ["FC274","Warm Grey V",91,91,92],
+      ["FC275","Warm Grey VI",65,66,68],
+      ["FC276","Chrome Oxide Green Fiery",5,125,114],
+      ["FC278","Chrome Oxide Green",61,76,71],
+      ["FC280","Burnt Umber",89,76,66],
+      ["FC283","Burnt Siena",119,83,66],
+    ]
+  },
+    "Derwent Inktense": {
+    short: "Inktense",
+    pencils: [
+      ["0100","Sherbet Lemon",224,215,72],
+      ["0110","Lemon",244,231,99],
+      ["0200","Sun Yellow",246,219,78],
+      ["0210","Cadmium Yellow",249,197,69],
+      ["0215","Gold",222,176,72],
+      ["0220","Sicilian Yellow",225,159,84],
+      ["0225","Golden Sun",223,154,73],
+      ["0230","Golden Yellow",250,166,70],
+      ["0240","Sienna Gold",207,109,74],
+      ["0245","Mango",245,147,63],
+      ["0250","Cadmium Orange",244,144,71],
+      ["0255","Orange Sorbet",239,125,74],
+      ["0260","Burnt Orange",162,95,61],
+      ["0300","Tangerine",227,112,67],
+      ["0310","Mid Vermilion",186,79,74],
+      ["0313","Wild Flame",221,92,64],
+      ["0317","Paprika",209,77,66],
+      ["0320","Scarlet Pink",193,74,61],
+      ["0330","Persian Red",201,69,58],
+      ["0400","Poppy Red",192,55,55],
+      ["0405","Pink Flamingo",222,97,108],
+      ["0410","Hot Red",178,56,57],
+      ["0500","Chilli Red",131,52,51],
+      ["0510","Cherry",167,58,63],
+      ["0520","Carmine Pink",169,51,62],
+      ["0530","Crimson",156,69,82],
+      ["0600","Shiraz",89,62,62],
+      ["0610","Red Violet",74,46,58],
+      ["0700","Fuchsia",153,48,77],
+      ["0710","Deep Rose",118,60,84],
+      ["0715","Sugar Plum",137,49,77],
+      ["0720","Thistle",98,57,79],
+      ["0730","Dusky Purple",62,55,57],
+      ["0735","Amethyst",130,83,145],
+      ["0740","Mauve",78,56,77],
+      ["0750","Dark Purple",60,56,59],
+      ["0760","Deep Violet",71,63,75],
+      ["0770","Nightshade",61,54,71],
+      ["0800","Violet",64,59,78],
+      ["0805","Violet Blue",65,52,95],
+      ["0810","Lagoon",61,56,90],
+      ["0820","Peacock Blue",65,63,101],
+      ["0825","Lapis Blue",43,101,197],
+      ["0830","Navy Blue",60,66,96],
+      ["0835","Denim",53,63,102],
+      ["0840","Iron Blue",62,65,78],
+      ["0850","Deep Blue",47,66,127],
+      ["0900","Iris Blue",19,108,189],
+      ["1000","Bright Blue",45,67,126],
+      ["1010","Dark Cerulean",50,81,124],
+      ["1100","Deep Indigo",57,58,68],
+      ["1200","Sea Blue",44,77,113],
+      ["1210","Dark Aquamarine",43,79,107],
+      ["1213","Malibu",20,143,180],
+      ["1215","Mineral Blue",20,80,101],
+      ["1220","Green Aquamarine",44,89,107],
+      ["1225","Sea Breeze",36,80,89],
+      ["1230","Mallard Green",26,101,96],
+      ["1240","Mint Leaf",32,155,108],
+      ["1300","Teal Green",16,124,107],
+      ["1310","Iron Green",62,75,76],
+      ["1320","Ionian Green",57,68,62],
+      ["1330","Vivid Green",26,112,76],
+      ["1340","Olivine",93,119,81],
+      ["1400","Apple Green",97,163,62],
+      ["1410","Jungle Green",51,135,72],
+      ["1500","Field Green",6,95,60],
+      ["1510","Beech Green",68,92,76],
+      ["1520","Hookers Green",54,101,66],
+      ["1530","Felt Green",77,119,76],
+      ["1535","Lime Green",208,218,69],
+      ["1540","Light Olive",83,107,62],
+      ["1550","Spring Green",83,103,58],
+      ["1560","Fern",58,72,62],
+      ["1600","Leaf Green",64,71,61],
+      ["1700","Mustard",159,110,62],
+      ["1710","Amber",111,83,63],
+      ["1720","Tan",110,86,63],
+      ["1730","Oak",81,77,70],
+      ["1740","Saddle Brown",101,78,63],
+      ["1800","Baked Earth",154,77,61],
+      ["1900","Willow",111,77,64],
+      ["1903","Burnt Umber",81,72,68],
+      ["1907","Natural Brown",86,68,64],
+      ["1910","Red Oxide",106,66,63],
+      ["1920","Madder Brown",74,61,57],
+      ["1930","Dark Chocolate",61,57,56],
+      ["2000","Bark",60,58,58],
+      ["2010","Sepia Ink",58,59,59],
+      ["2020","Indian Ink",59,60,61],
+      ["2030","Chinese Ink",57,57,59],
+      ["2100","Charcoal Grey",56,59,60],
+      ["2103","Asphalt",62,63,65],
+      ["2107","Storm Dust",84,87,92],
+      ["2110","Payne's Grey",60,61,71],
+      ["2120","Neutral Grey",57,57,60],
+      ["2130","Dark Mink",79,75,83],
+      ["2200","Ink Black",56,57,59],
+      ["2300","Antique White",236,235,236],
+      ["2400","Outliner",72,73,75],
+    ]
+  },
+    "Caran d'Ache Luminance": {
+    short: "Luminance",
+    pencils: [
+      ["001","White",240,240,238],
+      ["002","Silver Grey",204,211,217],
+      ["004","Steel Grey",149,163,172],
+      ["009","Black",41,42,44],
+      ["015","Olive Yellow",190,182,70],
+      ["025","Green Ochre",154,124,51],
+      ["030","Orange",250,150,48],
+      ["034","Yellow Ochre",221,168,66],
+      ["036","Raw Sienna",211,155,74],
+      ["037","Brown Ochre",175,122,77],
+      ["039","Olive Brown",113,101,66],
+      ["041","Apricot",247,164,97],
+      ["044","Terracotta",188,101,73],
+      ["046","Cassel Earth",94,79,71],
+      ["061","Permanent Red",208,60,43],
+      ["065","Russet",177,71,53],
+      ["066","Natural Russet",137,76,60],
+      ["068","Herculanum Red",221,152,131],
+      ["069","Burnt Sienna",103,61,51],
+      ["070","Scarlet",198,55,56],
+      ["077","Burnt Ochre",159,92,62],
+      ["083","Ultramarine Pink",209,142,193],
+      ["093","Violet Grey",149,136,147],
+      ["094","Hibiscus Pink",180,112,128],
+      ["095","Light Aubergine",115,80,92],
+      ["112","Manganese Violet",172,131,183],
+      ["115","Quinacridone Purple",128,50,125],
+      ["120","Violet",72,45,125],
+      ["129","Violet Brown",100,76,112],
+      ["135","Bleu de Nimes",40,37,101],
+      ["140","Ultramarine",49,91,210],
+      ["159","Prussian Blue",29,62,110],
+      ["161","Light Blue",66,158,206],
+      ["162","Phthalocyanine Blue",0,89,165],
+      ["171","Turquoise Blue",74,168,194],
+      ["180","Malachite Green",0,77,97],
+      ["181","Light Malachite Green",106,193,190],
+      ["182","Cobalt Green",109,171,137],
+      ["185","Ice Blue",0,83,124],
+      ["212","Chromium Oxyde Green",92,123,86],
+      ["214","Beryl Green",0,144,128],
+      ["220","Grass Green",0,127,54],
+      ["225","Moss Green",83,103,66],
+      ["240","Lemon Yellow",240,236,87],
+      ["242","Primrose",240,233,195],
+      ["350","Purplish Red",170,43,93],
+      ["407","Sepia",66,55,50],
+      ["470","Spring Green",181,221,75],
+      ["495","Slate Grey",63,67,73],
+      ["504","Payne's Grey 30%",137,149,163],
+      ["507","Payne's Grey 60%",79,89,103],
+      ["508","Payne's Grey",59,66,78],
+      ["520","Medium Cadmium Yellow (Imit.)",250,218,60],
+      ["523","Indian Yellow",233,196,65],
+      ["533","Dark Cadmium Orange (Imit.)",246,113,55],
+      ["542","Butternut",242,203,148],
+      ["548","Raw Umber",102,86,65],
+      ["571","Anthraquinoid Pink",237,130,123],
+      ["575","Carmine Lake",76,38,41],
+      ["580","Anthraquinone Carmine",172,27,56],
+      ["581","Pink White",238,226,220],
+      ["583","Violet Pink",189,128,135],
+      ["585","Perylene Brown",125,30,42],
+      ["589","Crimson Alizarin (Hue)",150,29,52],
+      ["599","Crimson Aubergine",118,39,57],
+      ["630","Ultramarine Violet",154,147,205],
+      ["639","Dark Indigo",35,32,37],
+      ["649","Indanthrone Blue",29,27,55],
+      ["660","Middle Cobalt Blue (Hue)",0,94,190],
+      ["661","Cobalt Blue 5%",162,194,231],
+      ["662","Cobalt Blue 10%",91,145,218],
+      ["671","Chrysocolla Blue",0,181,205],
+      ["713","Middle Verdigris",173,194,172],
+      ["719","Dark Phthalocyanine Green",51,66,61],
+      ["729","Dark English Green",11,100,91],
+      ["732","Olive Brown 10%",202,190,156],
+      ["736","Olive Brown 50%",150,137,100],
+      ["739","Dark Sap Green",39,65,66],
+      ["741","Warm Earth 5%",187,146,126],
+      ["745","Warm Earth 40%",172,135,116],
+      ["748","Warm Earth 70%",93,77,70],
+      ["755","Grey Blue",57,116,160],
+      ["801","Buff Titanium",238,230,216],
+      ["802","French Grey 10%",180,171,165],
+      ["803","French Grey 30%",136,126,121],
+      ["808","French Grey",102,92,87],
+      ["810","Bismuth Yellow",246,216,90],
+      ["820","Golden Bismuth Yellow",248,200,83],
+      ["821","Naples Ochre",239,219,170],
+      ["832","Brown Ochre 10%",230,200,164],
+      ["836","Brown Ochre 50%",193,148,105],
+      ["842","Raw Umber 10%",202,189,169],
+      ["846","Raw Umber 50%",142,130,109],
+      ["850","Cornelian",223,97,46],
+      ["862","Burnt Sienna 10%",192,153,152],
+      ["866","Burnt Sienna 50%",136,92,89],
+      ["872","Burnt Ochre 10%",230,186,159],
+      ["876","Burnt Ochre 50%",196,130,99],
+      ["902","Sepia 10%",156,146,146],
+      ["906","Sepia 50%",94,84,84],
+    ]
+  },
+  "Holbein Artists' Colored Pencil": {
+    short: "Holbein",
+    pencils: [
+      ["OP011","Cherry Blossom",249,205,205],
+      ["OP019","Shell Pink",249,216,201],
+      ["OP022","Pink",245,157,155],
+      ["OP024","Coral",248,151,141],
+      ["OP028","Salmon Pink",253,160,127],
+      ["OP031","Carnation",216,95,105],
+      ["OP040","Rose",194,56,86],
+      ["OP042","Carmine",192,50,59],
+      ["OP043","Signal Red",205,58,61],
+      ["OP044","Scarlet",217,72,56],
+      ["OP046","Vermilion",229,81,52],
+      ["OP047","Tiger Lily",235,102,54],
+      ["OP048","Orange",243,122,54],
+      ["OP051","Strawberry",187,49,80],
+      ["OP052","Madder Red",189,65,70],
+      ["OP054","Light Red",186,78,65],
+      ["OP057","Burnt Sienna",177,95,73],
+      ["OP059","Autumn Leaf",202,120,82],
+      ["OP060","Wine Red",133,49,68],
+      ["OP062","Crimson",135,54,56],
+      ["OP076","Ash Rose",201,164,162],
+      ["OP080","Burgundy",107,53,60],
+      ["OP086","Chocolate",88,68,64],
+      ["OP093","Mahogany",133,62,58],
+      ["OP096","Cinnamon",174,110,97],
+      ["OP097","Brick",165,83,64],
+      ["OP098","Cocoa",144,80,59],
+      ["OP099","Brown",144,87,59],
+      ["OP116","Ivory",248,239,211],
+      ["OP120","Peach",240,189,165],
+      ["OP122","Jaune Brillant",245,205,161],
+      ["OP123","Light Sand",243,215,166],
+      ["OP127","Cream",250,228,134],
+      ["OP131","Apricot",255,183,114],
+      ["OP134","Naples Yellow",255,217,133],
+      ["OP140","Tangerine",255,161,51],
+      ["OP142","Marigold",255,173,44],
+      ["OP143","Sunflower",255,194,47],
+      ["OP145","Dandelion",254,208,50],
+      ["OP147","Canary Yellow",249,224,67],
+      ["OP149","Lemon",240,238,100],
+      ["OP153","Yellow Ochre",223,169,85],
+      ["OP165","Mustard",206,167,64],
+      ["OP171","Cork",210,178,154],
+      ["OP173","Beige",211,188,157],
+      ["OP175","Sand",208,192,154],
+      ["OP180","Burnt Umber",82,62,53],
+      ["OP182","Sepia",78,67,59],
+      ["OP184","Raw Umber",136,116,87],
+      ["OP187","Olive Drab",109,102,80],
+      ["OP189","Olive Green",91,96,60],
+      ["OP192","Tan",171,125,81],
+      ["OP194","Kahki",176,146,92],
+      ["OP195","Olive Brown",151,132,77],
+      ["OP198","Olive Yellow",171,165,81],
+      ["OP222","Lettuce Green",193,232,147],
+      ["OP225","Cobalt Green",133,218,171],
+      ["OP227","Jade Green",81,198,172],
+      ["OP228","Ice Green",140,222,216],
+      ["OP235","Emerald Green",56,197,135],
+      ["OP240","Chartreuse Green",221,241,106],
+      ["OP242","Spring Green",188,233,107],
+      ["OP243","Fresh Green",136,220,97],
+      ["OP245","Summer Green",0,173,112],
+      ["OP247","Viridian",0,147,125],
+      ["OP248","Peacock Green",0,121,124],
+      ["OP251","Apple Green",173,195,68],
+      ["OP254","Evergreen",96,167,87],
+      ["OP255","Malachite Green",10,131,85],
+      ["OP262","Sap Green",101,132,68],
+      ["OP264","Holly Green",58,114,79],
+      ["OP267","Forest Green",48,91,84],
+      ["OP269","Triton Green",22,96,99],
+      ["OP270","Willow Green",188,189,154],
+      ["OP271","Opal Green",196,209,159],
+      ["OP272","Misty Green",174,191,155],
+      ["OP274","Mint Green",152,188,152],
+      ["OP275","Surf Green",135,178,155],
+      ["OP277","Celadon",130,178,162],
+      ["OP288","Fir Green",51,73,70],
+      ["OP290","Moss Green",127,133,82],
+      ["OP291","Leaf Green",141,160,77],
+      ["OP292","Cactus Green",98,123,82],
+      ["OP294","Jasper Green",75,110,83],
+      ["OP296","Bottle Green",58,97,86],
+      ["OP312","Horizon Blue",186,222,232],
+      ["OP321","Porcelain Blue",80,191,215],
+      ["OP323","Aqua",90,187,234],
+      ["OP324","Sky Blue",125,193,237],
+      ["OP326","Forget-me-not Blue",140,179,230],
+      ["OP328","Lavender Blue",146,179,230],
+      ["OP335","Cerulean Blue",0,127,201],
+      ["OP339","Smalt Blue",115,128,208],
+      ["OP340","Peacock Blue",0,116,139],
+      ["OP343","Turquoise Blue",0,114,164],
+      ["OP345","Spectrum Blue",0,102,172],
+      ["OP347","Cobalt Blue",0,96,182],
+      ["OP348","Royal Blue",26,75,165],
+      ["OP349","Ultra Blue",73,91,180],
+      ["OP365","Navy Blue",29,63,100],
+      ["OP368","Prussian Blue",39,70,115],
+      ["OP371","Sky Mist",126,163,170],
+      ["OP379","Smoke Blue",145,154,176],
+      ["OP395","Saxe Blue",104,149,186],
+      ["OP422","Lilac",184,169,209],
+      ["OP429","Rose Pink",237,153,174],
+      ["OP430","Wisteria",148,139,211],
+      ["OP434","Mauve",215,135,199],
+      ["OP436","Fuchsia",226,145,203],
+      ["OP437","Cosmos",223,119,166],
+      ["OP440","Pansy",64,52,135],
+      ["OP441","Violet",78,42,127],
+      ["OP443","Iris",94,45,111],
+      ["OP446","Amethyst",152,52,120],
+      ["OP448","Azalea",190,54,122],
+      ["OP449","Magenta",182,51,97],
+      ["OP460","Indigo",55,59,89],
+      ["OP469","Bordeaux Red",135,42,71],
+      ["OP476","Sea Fog",189,164,180],
+      ["OP481","Grape",63,58,80],
+      ["OP486","Raisin",76,56,71],
+      ["OP495","Rose Grey",174,118,164],
+      ["OP500","White",243,242,242],
+      ["OP501","Soft White",244,243,243],
+      ["OP510","Black",38,38,40],
+      ["OP511","Lamp Black",50,51,53],
+      ["OP521","Warm Grey #1",228,223,217],
+      ["OP522","Warm Grey #2",198,192,183],
+      ["OP523","Warm Grey #3",162,157,150],
+      ["OP524","Warm Grey #4",136,130,122],
+      ["OP525","Warm Grey #5",107,103,96],
+      ["OP526","Warm Grey #6",79,77,73],
+      ["OP531","Cool Grey #1",223,223,221],
+      ["OP532","Cool Grey #2",182,185,191],
+      ["OP533","Cool Grey #3",148,153,162],
+      ["OP534","Cool Grey #4",130,135,143],
+      ["OP535","Cool Grey #5",92,98,108],
+      ["OP536","Cool Grey #6",71,75,82],
+      ["OP600","Gold",180,146,103],
+      ["OP610","Pale Gold",178,165,127],
+      ["OP620","Bronze",160,155,138],
+      ["OP630","Copper",158,103,84],
+      ["OP640","Silver",150,154,159],
+      ["OP650","Antique Silver",136,138,139],
+      ["OP700","Luminous Red",255,104,131],
+      ["OP710","Luminous Rose",223,76,182],
+      ["OP720","Luminous Opera",252,83,176],
+      ["OP730","Luminous Orange",255,163,101],
+      ["OP740","Luminous Lemon",243,255,114],
+      ["OP750","Luminous Green",178,250,117],
+    ]
+  },
+  "Castle Art Soft Touch": {
+    short: "Soft Touch",
+    pencils: [
+      ["001","Lemon Yellow Light",243,240,155],
+      ["002","Primrose Yellow",250,221,149],
+      ["003","Golden Yellow",253,209,121],
+      ["004","Cadmium Yellow Light",252,210,82],
+      ["005","Lemon Yellow",248,229,110],
+      ["006","Golden Yellow Deep",253,219,56],
+      ["007","Cadmium Yellow",235,182,71],
+      ["008","Naples Yellow",254,200,122],
+      ["009","Brilliant Yellow",249,191,88],
+      ["010","Yellow Ochre Light",214,157,84],
+      ["011","Terracotta Light",194,132,85],
+      ["012","Cinnamon",179,117,88],
+      ["013","Terracotta",202,106,76],
+      ["014","Burnt Ochre",227,94,64],
+      ["015","Red Ochre",221,83,68],
+      ["016","Orange Lake",229,97,58],
+      ["017","Cadmium Orange",243,122,61],
+      ["018","Peach",239,116,92],
+      ["019","Coral",246,148,120],
+      ["020","Tangerine",248,173,126],
+      ["021","Venetian Red",232,99,89],
+      ["022","Scarlet Red",211,64,62],
+      ["023","Vermilion",206,63,65],
+      ["024","Cadmium Red",205,61,70],
+      ["025","Spice Red",110,55,61],
+      ["026","Chinese Orange",165,81,67],
+      ["027","Cherry",126,39,69],
+      ["028","Aubergine",117,68,103],
+      ["029","Purple",152,48,111],
+      ["030","Purple Light",170,44,117],
+      ["031","Jaipur Pink",214,79,114],
+      ["032","Cherry Pink",209,67,95],
+      ["033","Grenadine Light",234,123,143],
+      ["034","Rose Pink",223,117,162],
+      ["035","Lavender Light",184,118,206],
+      ["036","Lavender",129,100,181],
+      ["037","Heather Purple",85,74,158],
+      ["038","Purple Lake Deep",82,55,118],
+      ["039","Mulberry",61,53,84],
+      ["040","Ultramarine Violet",51,53,119],
+      ["041","Delft Blue",54,67,140],
+      ["042","Prussian Blue",50,60,111],
+      ["043","Ultramarine",33,58,115],
+      ["044","Ultramarine Light",24,78,146],
+      ["045","Indigo Light",49,60,83],
+      ["046","Sky Blue",0,113,194],
+      ["047","Cerulean Blue Light",0,128,202],
+      ["048","Cobalt Turquoise",50,171,204],
+      ["049","Teal Green Light",0,123,134],
+      ["050","Pthalo Green",0,110,102],
+      ["051","Pthalo Green Light",0,114,96],
+      ["052","Viridian",45,59,59],
+      ["053","Chrome Green",55,73,64],
+      ["054","Hooker's Green",42,64,56],
+      ["055","Prussian Green",53,98,77],
+      ["056","Juniper Green",50,101,78],
+      ["057","Castle Green Deep",26,128,80],
+      ["058","Castle Green",0,145,90],
+      ["059","Castle Green Light",94,185,81],
+      ["060","Leaf Green Middle",101,208,98],
+      ["061","Leaf Green Light",188,232,113],
+      ["062","Cadmium Green",92,106,66],
+      ["063","Oxide of Chrome",51,64,56],
+      ["064","Terre Verde",89,102,98],
+      ["065","Cool Gray",75,78,80],
+      ["066","Cool Gray Deep",79,84,87],
+      ["067","Davy's Gray",124,120,116],
+      ["068","Burnt Umber",73,61,57],
+      ["069","Van Dyck Brown",94,75,70],
+      ["070","Sepia",109,73,67],
+      ["071","Ivory Black",50,51,52],
+      ["072","Titanium White",242,239,231],
+      ["073","Naples Yellow Light",244,230,187],
+      ["074","Cadmium Orange Light",255,185,128],
+      ["075","Cadmium Yellow Deep",248,173,82],
+      ["076","Green Gold",163,138,68],
+      ["077","Yellow Ochre",155,117,64],
+      ["078","Marigold",246,145,69],
+      ["079","Cadmium Orange Deep",236,106,49],
+      ["080","Grenadine",223,87,110],
+      ["081","Opera Rose",225,116,163],
+      ["082","Azalea Pink",234,135,161],
+      ["083","Bengal Rose Light",220,112,180],
+      ["084","Bengal Rose",203,90,149],
+      ["085","Bengal Rose Deep",194,68,134],
+      ["086","Magenta",129,37,58],
+      ["087","Alizarin Crimson",169,23,54],
+      ["088","Cobalt Purple",132,58,139],
+      ["089","Purple Deep",126,42,98],
+      ["090","Mauve Deep",86,67,165],
+      ["091","Purple Lake",98,60,134],
+      ["092","Cornflower Blue",75,74,163],
+      ["093","Mauve",152,148,211],
+      ["094","Cobalt Blue Light",61,99,193],
+      ["095","Cobalt Blue Deep",38,73,162],
+      ["096","Cobalt Blue",52,104,199],
+      ["097","Intense Blue",0,115,168],
+      ["098","Primary Blue",0,124,200],
+      ["099","Cerulean Blue Middle",0,147,212],
+      ["100","Cerulean Blue",0,133,208],
+      ["101","Cobalt Turquoise Green",0,162,177],
+      ["102","Pthalo Turquoise",0,139,122],
+      ["103","Cypress Green",15,91,124],
+      ["104","Terre Verde Deep",54,67,75],
+      ["105","Teal Green",0,109,124],
+      ["106","Jade Green",0,167,147],
+      ["107","Mint Green",13,189,138],
+      ["108","Mint Green Light",6,186,128],
+      ["109","Emerald Green",0,174,96],
+      ["110","Permanent Green",75,141,53],
+      ["111","Leaf Green",119,195,66],
+      ["112","Cadmium Green Pale",126,148,70],
+      ["113","Sap Green",85,99,66],
+      ["114","Burnt Sienna",134,72,49],
+      ["115","Brown Ochre",123,75,64],
+      ["116","Raw Umber",119,85,68],
+      ["117","Walnut Brown",62,43,39],
+      ["118","Charcoal Gray",97,95,93],
+      ["119","Payne's Gray",88,94,98],
+      ["120","Warm Gray Light",178,173,165],
+    ]
+  },
+  "Castle Art Harmonious Collection": {
+    short: "Harmonious",
+    pencils: [
+      ["001HA","Cornforth White",224,216,213],
+      ["002HA","Ammonite",211,206,197],
+      ["003HA","Mulberry Mist",228,216,219],
+      ["004HA","Wheatgrass",249,213,196],
+      ["005HA","Calamine",240,195,193],
+      ["006HA","Dusty Rose",207,165,177],
+      ["007HA","Pavillion Gray",180,154,157],
+      ["008HA","Spring Heather",179,150,163],
+      ["009HA","Pumice",191,177,180],
+      ["010HA","Misty Gray",196,193,189],
+      ["011HA","Gossamer",181,175,166],
+      ["012HA","French Gray",172,167,160],
+      ["013HA","Driftwood",103,101,100],
+      ["014HA","Moss Gray",113,110,107],
+      ["015HA","Stone Gray",139,132,129],
+      ["016HA","Beaver Gray",82,76,83],
+      ["017HA","Vintage Grape",137,127,121],
+      ["018HA","Porpoise",80,77,89],
+      ["019HA","Black Olive",86,86,87],
+      ["020HA","Moonstone",91,90,91],
+      ["021HA","Oak",68,54,52],
+      ["022HA","Mocha",75,59,58],
+      ["023HA","Cocoa",66,55,52],
+      ["024HA","Dark Chocolate",54,49,48],
+      ["025HA","Sweet Lilac",160,149,204],
+      ["026HA","Purple Dusk",165,154,210],
+      ["027HA","Wildberry",195,164,209],
+      ["028HA","Dusty Lavender",164,150,172],
+      ["029HA","Purple Rose",178,154,202],
+      ["030HA","Dark Pearl",166,153,160],
+      ["031HA","Flint",135,119,147],
+      ["032HA","Brassica",116,96,122],
+      ["033HA","Mink",150,138,146],
+      ["034HA","Nightshade",114,105,136],
+      ["035HA","Antique Violet",89,63,100],
+      ["036HA","Eggplant",80,48,116],
+      ["037HA","Tempest",84,78,104],
+      ["038HA","Deep Aegean",81,81,108],
+      ["039HA","Dark Iris",79,85,118],
+      ["040HA","Harbour Blue",65,63,86],
+      ["041HA","Inky Blue",53,47,78],
+      ["042HA","Blueberry",65,57,113],
+      ["043HA","Topaz",37,49,100],
+      ["044HA","Night Blue",43,53,75],
+      ["045HA","Ocean Sapphire",71,97,120],
+      ["046HA","Petrel Blue",58,91,114],
+      ["047HA","Gentian Blue",93,143,175],
+      ["048HA","Forget Me Not",126,155,214],
+      ["049HA","Mosaic Blue",138,186,196],
+      ["050HA","Duck Egg",163,207,217],
+      ["051HA","Cumulus",153,182,223],
+      ["052HA","Aloe Green",206,222,195],
+      ["053HA","Pale Apple",162,185,162],
+      ["054HA","Seafoam Green",145,157,142],
+      ["055HA","Mellow Sage",159,163,156],
+      ["056HA","Moss",166,176,182],
+      ["057HA","Olive Gray",183,200,173],
+      ["058HA","Cirrus",199,203,204],
+      ["059HA","Ash",182,187,186],
+      ["060HA","Pebble",148,161,171],
+      ["061HA","Pewter",125,137,145],
+      ["062HA","Wild Thyme",130,139,140],
+      ["063HA","Pine Green",75,89,87],
+      ["064HA","Storm Gray",40,55,55],
+      ["065HA","Bayleaf",88,98,107],
+      ["066HA","Seaweed",38,44,47],
+      ["067HA","Opera Mauve",91,74,103],
+      ["068HA","Sour Berry",93,58,82],
+      ["069HA","Plum",120,70,106],
+      ["070HA","Beetroot",102,53,91],
+      ["071HA","Amaretto",115,71,72],
+      ["072HA","Rosy Stone",151,118,124],
+    ]
+  },
+  "Castle Art Pasteltint": {
+    short: "Pasteltint",
+    pencils: [
+      ["001","Orchid White",248,246,219],
+      ["002","Mimosa",248,243,182],
+      ["003","Saffron",246,230,155],
+      ["004","Magnolia",245,226,182],
+      ["005","Rosa",241,199,167],
+      ["006","Almond Rose",241,204,156],
+      ["007","Petunia Pink",240,193,149],
+      ["008","Coral Blush",236,175,154],
+      ["009","Blushing Rose",235,173,173],
+      ["010","Amarylis",234,165,178],
+      ["011","Foxglove",231,160,182],
+      ["012","Peach Cream",244,223,209],
+      ["013","Snow Waffle",245,223,223],
+      ["014","Carnation",238,193,179],
+      ["015","Cream Rose",233,202,165],
+      ["016","Apricot Twist",229,193,166],
+      ["017","Candytuft",243,233,190],
+      ["018","Inca Gold",201,161,81],
+      ["019","Begonia",218,215,156],
+      ["020","Cowslip",226,231,163],
+      ["021","Sunflower",213,202,112],
+      ["022","Juniper Lime",194,202,98],
+      ["023","Day Lily",215,225,171],
+      ["024","Savannah",201,221,163],
+      ["025","Lime Coral",213,224,146],
+      ["026","Jasmine",244,236,128],
+      ["027","Greenflower",163,204,158],
+      ["028","Viridi",146,199,175],
+      ["029","Angelica",167,201,157],
+      ["030","Bayberry",192,218,165],
+      ["031","Jade",187,210,195],
+      ["032","Periwinkle",175,215,227],
+      ["033","Delphinium",174,215,219],
+      ["034","Blue Poppy",222,236,242],
+      ["035","Blue Daisy",184,188,219],
+      ["036","Blue Mist",182,197,224],
+      ["037","Lobelia",157,208,237],
+      ["038","Bluebell",160,195,226],
+      ["039","Larkspur",138,162,185],
+      ["040","Hydrangea",135,135,186],
+      ["041","Heather",189,178,210],
+      ["042","Wisteria",196,176,206],
+      ["043","Tickle Pink",199,150,190],
+      ["044","Camellia",227,139,178],
+      ["045","Jellybean",229,184,209],
+      ["046","Perle",210,179,187],
+      ["047","Winterberry",209,207,203],
+      ["048","Peach Rose",235,228,214],
+    ]
+  },
+  "Arteza Professional Watercolor Pencils": {
+    short: "Arteza Pro",
+    pencils: [
+      ["A001","White Quartz",242,240,234],
+      ["A002","Fog Gray",193,200,192],
+      ["A003","Dolphin Gray",168,178,179],
+      ["A004","Mushroom Gray",222,215,203],
+      ["A005","Stone Gray",205,198,188],
+      ["A006","Smoke Gray",166,169,168],
+      ["A007","Steel Gray",158,163,162],
+      ["A008","Cloudy Gray",160,165,165],
+      ["A009","Elephant Gray",153,146,137],
+      ["A010","Shadow Gray",130,128,125],
+      ["A011","Koala Gray",118,123,123],
+      ["A012","Pewter Gray",112,111,109],
+      ["A013","Concrete Gray",92,91,92],
+      ["A014","Ash Black",65,65,66],
+      ["A015","Charcoal Gray",62,67,71],
+      ["A016","Onyx Black",70,71,73],
+      ["A017","Noir",49,51,52],
+      ["A018","Storm Gray",67,71,80],
+      ["A100","Cream",246,235,186],
+      ["A101","Sapphire Yellow",249,239,103],
+      ["A102","Jasmine Yellow",248,214,121],
+      ["A103","Chartreuse",240,242,163],
+      ["A104","Lemon Yellow",248,221,55],
+      ["A105","Honey",248,185,94],
+      ["A106","Sunflower Yellow",253,200,70],
+      ["A107","Turmeric Yellow",242,178,61],
+      ["A108","Tuscan Sun",250,170,53],
+      ["A109","Yellow Ochre",235,165,64],
+      ["A110","Marmalade Orange",247,173,120],
+      ["A111","Apricot",245,172,137],
+      ["A112","Pumpkin Orange",241,132,56],
+      ["A113","Orange",240,113,49],
+      ["A114","Blood Orange",211,87,64],
+      ["A115","Vermilion",217,71,56],
+      ["A116","Ginger",187,115,59],
+      ["A117","Rust Orange",195,107,77],
+      ["A200","Peaches & Cream",246,181,161],
+      ["A201","Earth Red",203,145,124],
+      ["A202","Burnt Ochre",184,113,88],
+      ["A203","Coral",236,126,98],
+      ["A204","Salmon Pink",228,123,110],
+      ["A205","Rose Red",227,81,75],
+      ["A206","Spanish Red",177,76,70],
+      ["A207","Crimson Red",191,62,79],
+      ["A208","Venetian Red",191,58,59],
+      ["A209","Carmine Red",198,67,74],
+      ["A210","Magenta",179,57,79],
+      ["A211","Cherry Red",180,70,77],
+      ["A212","Passion Fruit Red",152,74,68],
+      ["A213","Garnet Red",108,43,46],
+      ["A300","Camel Brown",176,129,65],
+      ["A301","Raw Sienna",143,99,59],
+      ["A302","Raw Umber",119,86,56],
+      ["A303","Coyote Brown",97,82,54],
+      ["A304","Cinnamon",151,86,62],
+      ["A305","Sienna Brown",133,84,73],
+      ["A306","Burnt Umber",119,97,74],
+      ["A307","Cocoa Brown",94,78,67],
+      ["A308","Espresso Brown",93,80,71],
+      ["A309","Hazelnut Brown",108,74,65],
+      ["A310","Dark Chocolate Brown",86,66,63],
+      ["A400","Pink Macaron",244,173,169],
+      ["A401","Peony Pink",241,119,149],
+      ["A402","Watermelon Pink",226,125,139],
+      ["A403","Flamingo Pink",229,132,170],
+      ["A404","Fuchsia",199,89,163],
+      ["A405","Fruit Punch",219,97,123],
+      ["A406","Plum Purple",210,95,129],
+      ["A407","Orchid Purple",167,81,160],
+      ["A408","Lilac",175,107,179],
+      ["A409","Lavender",131,104,185],
+      ["A410","Ube Purple",117,105,186],
+      ["A411","Purple Iris",132,80,138],
+      ["A412","Burgundy",150,56,94],
+      ["A413","Eggplant Purple",153,75,125],
+      ["A414","Violet",127,69,146],
+      ["A415","Wine Red",100,62,78],
+      ["A416","Amethyst Purple",83,57,124],
+      ["A417","Royal Purple",83,64,138],
+      ["A500","Sky Blue",26,165,225],
+      ["A501","Peacock Blue",5,147,221],
+      ["A502","Periwinkle Blue",118,158,231],
+      ["A503","Robin Egg Blue",1,150,185],
+      ["A504","Ocean Blue",2,124,138],
+      ["A505","Sapphire Blue",48,113,184],
+      ["A506","Aegean Blue",3,98,137],
+      ["A507","Mykonos Blue",3,81,154],
+      ["A508","Sea Blue",13,84,136],
+      ["A509","Egyptian Blue",40,79,186],
+      ["A510","Deep Teal",35,91,115],
+      ["A511","Blueberry Blue",66,84,158],
+      ["A512","Indigo",44,85,146],
+      ["A513","Prussian Blue",66,82,99],
+      ["A514","Ultramarine Blue",63,64,170],
+      ["A515","Midnight Blue",56,66,109],
+      ["A600","Lime Green",211,237,105],
+      ["A601","Spring Green",124,200,88],
+      ["A602","Absinthe Green",158,192,71],
+      ["A603","Pear Green",160,153,69],
+      ["A604","Turquoise",1,167,149],
+      ["A605","Shamrock Green",1,161,148],
+      ["A606","Mint Green",15,178,104],
+      ["A607","Parakeet Green",2,147,87],
+      ["A608","Apple Green",85,163,71],
+      ["A609","Matcha Green",93,129,55],
+      ["A610","Spearmint Green",5,138,95],
+      ["A611","Basil Green",37,119,68],
+      ["A612","Fern Green",80,123,102],
+      ["A613","Emerald Green",20,121,97],
+      ["A614","Forest Green",50,100,62],
+      ["A615","Sage Green",97,113,108],
+      ["A616","Moss Green",85,96,59],
+      ["A617","Olive Green",64,72,53],
+      ["A618","Jungle Green",56,75,63],
+      ["A619","Jade Green",49,88,86],
+      ["A700","Unicorn Purple",201,158,163],
+      ["A701","Silver",179,180,176],
+      ["A702","Gold",204,170,76],
+      ["A703","Copper",164,113,86],
+      ["A704","Dreamy Blue",60,106,186],
+    ]
+  },
+  "Derwent Lightfast": {
+    short: "Lightfast",
+    pencils: [
+      ["DL001","Banana",235,202,73],
+      ["DL002","Sun Yellow",249,215,62],
+      ["DL003","Yellow",240,184,64],
+      ["DL004","Champagne",243,224,171],
+      ["DL005","Mustard",233,178,72],
+      ["DL006","Gold",218,163,74],
+      ["DL007","Amber Gold",251,165,66],
+      ["DL008","Golden Sun",208,135,79],
+      ["DL009","Apricot",181,112,67],
+      ["DL010","Dark Honey",163,104,66],
+      ["DL011","Flame",240,114,62],
+      ["DL012","Dark Orange",130,61,51],
+      ["DL013","Derwent Red",184,56,58],
+      ["DL014","Strawberry",165,74,70],
+      ["DL015","Scarlet",193,63,63],
+      ["DL016","Autumn Red",157,74,76],
+      ["DL017","Cherry Red",162,55,72],
+      ["DL018","Chestnut",81,66,68],
+      ["DL019","Merlot",91,64,67],
+      ["DL020","Pale Peach",238,212,189],
+      ["DL021","Cinnamon",216,155,132],
+      ["DL022","Salmon",227,188,177],
+      ["DL023","Dusky Pink",209,149,137],
+      ["DL024","Oyster",232,218,220],
+      ["DL025","Magenta",120,57,70],
+      ["DL026","Bordeaux",108,58,72],
+      ["DL027","Deep Rose",109,55,79],
+      ["DL028","Purple",67,55,66],
+      ["DL029","Mars Violet",124,103,111],
+      ["DL030","Heather",179,135,172],
+      ["DL031","Wild Lavender",156,126,169],
+      ["DL032","Nightshade",65,62,69],
+      ["DL033","Violet",70,56,92],
+      ["DL034","Blue Violet",61,60,74],
+      ["DL035","Mid Ultramarine",135,168,223],
+      ["DL036","Deep Blue",57,63,99],
+      ["DL037","Sapphire",49,73,122],
+      ["DL038","Denim",56,62,83],
+      ["DL039","Mid Blue",56,67,85],
+      ["DL040","Midnight Blue (70%)",48,91,123],
+      ["DL041","Mid Blue (70%)",36,76,114],
+      ["DL042","Midnight Blue",55,75,96],
+      ["DL043","Arctic",227,230,227],
+      ["DL044","Dark Cyan",63,74,87],
+      ["DL045","Dark Indigo",55,54,63],
+      ["DL046","Ocean Blue",65,79,89],
+      ["DL047","Ocean Blue (Dark)",64,71,77],
+      ["DL048","Dark Turquoise",43,84,106],
+      ["DL049","Pacific Blue",31,83,106],
+      ["DL050","Light Aqua",207,234,227],
+      ["DL051","Turquoise Green",105,205,198],
+      ["DL052","Peridot (Blue)",0,128,112],
+      ["DL053","Mallard Green",43,82,85],
+      ["DL054","Basil",64,89,82],
+      ["DL055","Vivid Green",37,94,74],
+      ["DL056","Peridot (Yellow)",12,128,82],
+      ["DL057","Spruce Green",73,85,84],
+      ["DL058","Pine",61,76,77],
+      ["DL059","Racing Green",55,65,67],
+      ["DL060","Green Earth",104,130,118],
+      ["DL061","Mountain Green",53,93,81],
+      ["DL062","Grass Green",54,124,73],
+      ["DL063","Grass Green (70%)",81,155,77],
+      ["DL064","Foliage",95,116,71],
+      ["DL065","Ivy",77,79,70],
+      ["DL066","Forest",57,62,63],
+      ["DL067","Olive Earth",100,103,90],
+      ["DL068","Seaweed",88,89,82],
+      ["DL069","Lichen Green",128,116,95],
+      ["DL070","Light Bronze",157,137,97],
+      ["DL071","Warm Earth",123,105,87],
+      ["DL072","Brown Ochre",173,141,99],
+      ["DL073","Yellow Ochre",231,193,124],
+      ["DL074","Wheat",229,215,180],
+      ["DL075","Sandstone",190,129,91],
+      ["DL076","Persian Orange",152,83,66],
+      ["DL077","Burnt Sienna",179,115,88],
+      ["DL078","Mars Orange",158,101,78],
+      ["DL079","Sienna",162,114,98],
+      ["DL080","Autumn Brown",76,72,67],
+      ["DL081","Raisin",88,65,55],
+      ["DL082","Venetian Red",126,86,75],
+      ["DL083","Ruby Earth",128,85,90],
+      ["DL084","Sepia (Red)",111,87,80],
+      ["DL085","Natural Brown",84,67,64],
+      ["DL086","Chocolate",79,69,69],
+      ["DL087","Van Dyke Brown",116,102,90],
+      ["DL088","Taupe",109,94,94],
+      ["DL089","Fossil Grey",179,170,169],
+      ["DL090","Warm Grey",158,148,136],
+      ["DL091","Moonstone",183,181,174],
+      ["DL092","Cool Grey",182,180,172],
+      ["DL093","Granite",129,134,138],
+      ["DL094","Platinum",175,181,185],
+      ["DL095","Cloud Grey",121,122,122],
+      ["DL096","Mist",185,185,182],
+      ["DL097","Mars Black",62,60,60],
+      ["DL098","Midnight Black",61,60,64],
+      ["DL099","Black",63,64,65],
+      ["DL100","White",242,239,234],
+    ]
+  }
+};
+
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let imgData = null;
+let globalShift = 0;
+let lastR = null, lastG = null, lastB = null;
+let calibrations = {};
+let calTarget = null;
+let selectedBrands = new Set(["Prismacolor Premier"]);
+let myCollection = new Set(["Prismacolor Premier"]); // brands the user has added to their personal collection
+
+try {
+  const s = localStorage.getItem('ds_calibrations');
+  if (s) calibrations = JSON.parse(s);
+} catch(e) {}
+
+try {
+  const c = localStorage.getItem('ds_my_collection');
+  if (c) {
+    const arr = JSON.parse(c);
+    myCollection = new Set(arr);
+    selectedBrands = new Set(arr); // everything in the collection is active by default
+  }
+} catch(e) {}
+
+function saveMyCollection() {
+  try { localStorage.setItem('ds_my_collection', JSON.stringify([...myCollection])); } catch(e) {}
+}
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+// ─── BUILD BRAND DROPDOWN ────────────────────────────────────────────────────
+function updateDropdownLabel() {
+  const label = document.getElementById('brand-dropdown-label');
+  if (selectedBrands.size === 0) {
+    label.textContent = 'Choose brands…';
+  } else {
+    const names = [...selectedBrands].map(n => BRANDS[n].short);
+    label.textContent = names.join(', ');
+  }
+}
+
+// Map each brand's full name to its manufacturer group.
+// Falls back to the first word of the brand name if not listed here,
+// so new brands still group reasonably without needing an update.
+const MANUFACTURER_OF = {
+  "Prismacolor Premier": "Prismacolor",
+  "Faber-Castell Polychromos": "Faber-Castell",
+  "Derwent Inktense": "Derwent",
+  "Caran d'Ache Luminance": "Caran d'Ache",
+  "Holbein Artists' Colored Pencil": "Holbein",
+  "Castle Art Soft Touch": "Castle Art",
+  "Castle Art Harmonious Collection": "Castle Art",
+  "Castle Art Pasteltint": "Castle Art",
+};
+
+function manufacturerOf(brandName) {
+  if (MANUFACTURER_OF[brandName]) return MANUFACTURER_OF[brandName];
+  // Fallback: use leading words before a known line/series name pattern
+  return brandName.split(' ').slice(0, brandName.includes("d'Ache") ? 2 : 1).join(' ');
+}
+
+function groupByManufacturer(brandNameList) {
+  const groups = {};
+  const groupOrder = [];
+  brandNameList.forEach(name => {
+    const mfr = manufacturerOf(name);
+    if (!groups[mfr]) { groups[mfr] = []; groupOrder.push(mfr); }
+    groups[mfr].push(name);
+  });
+  return { groups, groupOrder };
+}
+
+let openGroups = new Set();      // manufacturer names currently expanded within My Pencils
+let openAddGroups = new Set();   // manufacturer names currently expanded within Add More Brands
+let addBrandsOpen = false;       // whether the "Add more brands" section itself is expanded
+
+function renderBrandGroup(container, mfr, brandNames, isOpen, onToggleOpen, isAddSection) {
+  const selectedInGroup = brandNames.filter(n => selectedBrands.has(n)).length;
+
+  const toggle = document.createElement('div');
+  toggle.className = 'brand-group-toggle' + (isOpen ? ' open' : '');
+  toggle.innerHTML = `
+    <span class="brand-group-name">${mfr}</span>
+    <span class="brand-group-meta">
+      ${selectedInGroup > 0 ? `<span class="brand-group-count">${selectedInGroup} selected</span>` : `<span class="brand-group-count">${brandNames.length} line${brandNames.length>1?'s':''}</span>`}
+      <span class="brand-group-arrow">▸</span>
+    </span>
+  `;
+  toggle.addEventListener('click', function(e) {
+    e.stopPropagation();
+    onToggleOpen();
+    buildBrandList();
+  });
+  container.appendChild(toggle);
+
+  const itemsWrap = document.createElement('div');
+  itemsWrap.className = 'brand-group-items' + (isOpen ? ' open' : '');
+
+  brandNames.forEach(name => {
+    const b = BRANDS[name];
+    const checked = selectedBrands.has(name);
+    const id = 'brand-' + name.replace(/\s+/g,'-').replace(/[^\w-]/g,'');
+    const item = document.createElement('div');
+    item.className = 'brand-item';
+    item.innerHTML = `
+      <input type="checkbox" id="${id}" ${checked ? 'checked' : ''}>
+      <label for="${id}">${b.short} <span>${b.pencils.length} pencils</span></label>
+    `;
+    item.querySelector('input').addEventListener('change', function() {
+      if (this.checked) {
+        selectedBrands.add(name);
+        if (isAddSection) myCollection.add(name); // adding a new brand joins the collection permanently
+      } else {
+        selectedBrands.delete(name);
+        if (isAddSection) myCollection.delete(name);
+      }
+      if (isAddSection) { saveMyCollection(); buildBrandList(); }
+      updateDropdownLabel();
+      if (lastR !== null) pickColor(lastR, lastG, lastB);
+    });
+    item.addEventListener('click', function(e) {
+      e.stopPropagation();
+    });
+    itemsWrap.appendChild(item);
+  });
+
+  container.appendChild(itemsWrap);
+}
+
+function buildBrandList() {
+  const container = document.getElementById('brand-list');
+  container.innerHTML = '';
+
+  const myBrandNames = Object.keys(BRANDS).filter(n => myCollection.has(n));
+  const otherBrandNames = Object.keys(BRANDS).filter(n => !myCollection.has(n));
+
+  if (myBrandNames.length === 0) {
+    const note = document.createElement('div');
+    note.className = 'empty-collection-note';
+    note.textContent = "You haven't added any pencils yet — tap \"Add more brands\" below to build your collection.";
+    container.appendChild(note);
+  } else {
+    const { groups, groupOrder } = groupByManufacturer(myBrandNames);
+    groupOrder.forEach(mfr => {
+      renderBrandGroup(
+        container, mfr, groups[mfr],
+        openGroups.has(mfr),
+        () => { openGroups.has(mfr) ? openGroups.delete(mfr) : openGroups.add(mfr); },
+        false
+      );
+    });
+  }
+
+  // Add more brands section
+  const addSection = document.createElement('div');
+  addSection.className = 'add-brands-section';
+  const addToggle = document.createElement('div');
+  addToggle.className = 'add-brands-toggle';
+  addToggle.innerHTML = `
+    <span class="add-brands-label">+ Add more brands</span>
+    <span class="brand-group-arrow" style="${addBrandsOpen ? 'transform:rotate(90deg);' : ''}">▸</span>
+  `;
+  addToggle.addEventListener('click', function(e) {
+    e.stopPropagation();
+    addBrandsOpen = !addBrandsOpen;
+    buildBrandList();
+  });
+  addSection.appendChild(addToggle);
+
+  if (addBrandsOpen) {
+    const addItemsWrap = document.createElement('div');
+    if (otherBrandNames.length === 0) {
+      const note = document.createElement('div');
+      note.className = 'empty-collection-note';
+      note.textContent = "Every available brand is already in your collection.";
+      addItemsWrap.appendChild(note);
+    } else {
+      const { groups, groupOrder } = groupByManufacturer(otherBrandNames);
+      groupOrder.forEach(mfr => {
+        renderBrandGroup(
+          addItemsWrap, mfr, groups[mfr],
+          openAddGroups.has(mfr),
+          () => { openAddGroups.has(mfr) ? openAddGroups.delete(mfr) : openAddGroups.add(mfr); },
+          true
+        );
+      });
+    }
+    addSection.appendChild(addItemsWrap);
+  }
+
+  container.appendChild(addSection);
+
+  updateDropdownLabel();
+}
+
+// Dropdown toggle
+document.getElementById('brand-dropdown-btn').addEventListener('click', function(e) {
+  e.stopPropagation();
+  document.getElementById('brand-dropdown-menu').classList.toggle('open');
+});
+
+document.addEventListener('click', function() {
+  document.getElementById('brand-dropdown-menu').classList.remove('open');
+});
+
+buildBrandList();
+
+// ─── FILE UPLOAD ─────────────────────────────────────────────────────────────
+const REMEMBER_IMAGE_KEY = 'ds_remember_image_enabled';
+const SAVED_IMAGE_KEY = 'ds_saved_image';
+let rememberImageEnabled = localStorage.getItem(REMEMBER_IMAGE_KEY) === 'true';
+
+function updateRememberToggleUI() {
+  document.getElementById('remember-toggle').classList.toggle('on', rememberImageEnabled);
+}
+
+// Downscale a data URL to a max dimension before persisting to localStorage,
+// since localStorage is a small (~5-10MB total) text-only bucket and a raw
+// phone photo can easily blow past that once base64-encoded. This is ONLY
+// for the persisted copy — the live working canvas always uses the full
+// original image, so color sampling accuracy is unaffected.
+function downscaleForStorage(img, maxDim) {
+  const scale = Math.min(maxDim / img.width, maxDim / img.height, 1);
+  const w = Math.floor(img.width * scale);
+  const h = Math.floor(img.height * scale);
+  const tmp = document.createElement('canvas');
+  tmp.width = w; tmp.height = h;
+  tmp.getContext('2d').drawImage(img, 0, 0, w, h);
+  return tmp.toDataURL('image/jpeg', 0.85);
+}
+
+function saveImageIfEnabled(img) {
+  if (!rememberImageEnabled) return;
+  try {
+    const downscaled = downscaleForStorage(img, 1500);
+    localStorage.setItem(SAVED_IMAGE_KEY, downscaled);
+  } catch (e) {
+    // Quota exceeded or similar — fail silently, persistence is a nice-to-have
+  }
+}
+
+function clearSavedImage() {
+  try { localStorage.removeItem(SAVED_IMAGE_KEY); } catch (e) {}
+}
+
+function loadImageFromSrc(src, opts) {
+  opts = opts || {};
+  const img = new Image();
+  img.onload = function() {
+    const area = document.getElementById('image-area');
+    const fitMargin = 16; // small breathing-room border so the image never touches the edges
+    // Use the toolbar's real rendered height rather than a hardcoded 38px —
+    // on iPad view the toolbar can wrap to two lines and grow taller, and
+    // this keeps the fit calculation correct regardless of layout variant.
+    const toolbarH = document.querySelector('.image-toolbar').offsetHeight;
+    const scale = Math.min((area.clientWidth - fitMargin * 2) / img.width, (area.clientHeight - toolbarH - fitMargin * 2) / img.height, 1);
+    canvas.width = Math.floor(img.width * scale);
+    canvas.height = Math.floor(img.height * scale);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    document.getElementById('upload-prompt').style.display = 'none';
+    canvas.style.display = 'block';
+    document.getElementById('image-area').classList.add('has-image');
+    resetZoom();
+    if (opts.persistIfEnabled) saveImageIfEnabled(img);
+  };
+  img.src = src;
+}
+
+document.getElementById('file-input').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    loadImageFromSrc(ev.target.result, { persistIfEnabled: true });
+  };
+  reader.readAsDataURL(file);
+});
+
+// Restore the last image on page load, only if the toggle was left on.
+// (Actual invocation happens at the bottom of the script, after canvasViewport/
+// canvasSizer/resetZoom etc. are all defined, since image loading is async
+// and could otherwise race ahead of those declarations.)
+function restoreSavedImageIfEnabled() {
+  if (!rememberImageEnabled) return;
+  try {
+    const saved = localStorage.getItem(SAVED_IMAGE_KEY);
+    if (saved) loadImageFromSrc(saved, { persistIfEnabled: false });
+  } catch (e) {}
+}
+
+document.getElementById('remember-toggle').addEventListener('click', function(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  rememberImageEnabled = !rememberImageEnabled;
+  try { localStorage.setItem(REMEMBER_IMAGE_KEY, rememberImageEnabled ? 'true' : 'false'); } catch (err) {}
+  updateRememberToggleUI();
+  if (rememberImageEnabled) {
+    // If there's already an image loaded right now, save it immediately
+    // rather than waiting for the next upload.
+    if (imgData) {
+      const liveImg = new Image();
+      liveImg.onload = function() { saveImageIfEnabled(liveImg); };
+      liveImg.src = canvas.toDataURL();
+    }
+  } else {
+    clearSavedImage();
+  }
+});
+
+updateRememberToggleUI();
+
+let zoomLevel = 1;
+const ZOOM_MIN = 1, ZOOM_MAX = 8, ZOOM_STEP = 1.4;
+const canvasViewport = document.getElementById('canvas-viewport');
+const canvasSizer = document.getElementById('canvas-sizer');
+let baseCanvasW = 0, baseCanvasH = 0; // canvas's natural CSS size at 100% zoom (= canvas.width/height)
+
+function applyZoom() {
+  const w = baseCanvasW * zoomLevel, h = baseCanvasH * zoomLevel;
+  const vpW = canvasViewport.clientWidth, vpH = canvasViewport.clientHeight;
+
+  // The sizer is always at least as big as the viewport, so there's always
+  // genuine room to scroll the canvas fully into view from any edge —
+  // including all the way to its true top-left — regardless of how the
+  // browser would otherwise handle centering an overflowing element.
+  const sizerW = Math.max(vpW, w);
+  const sizerH = Math.max(vpH, h);
+  canvasSizer.style.width = sizerW + 'px';
+  canvasSizer.style.height = sizerH + 'px';
+
+  // Center the canvas within the sizer (this is a simple, unambiguous
+  // offset — not flexbox centering an overflowing box).
+  const offsetX = (sizerW - w) / 2;
+  const offsetY = (sizerH - h) / 2;
+  canvas.style.left = offsetX + 'px';
+  canvas.style.top = offsetY + 'px';
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+
+  document.getElementById('zoom-pct').textContent = Math.round(zoomLevel * 100) + '%';
+}
+
+function zoomAt(newZoom, clientX, clientY) {
+  newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
+  if (newZoom === zoomLevel) return;
+
+  // Keep the point under the cursor stable while zooming. Because the sizer
+  // model makes scroll position unambiguous, this is now a straightforward
+  // "find content point under cursor, recompute scroll so it's still there."
+  const canvasRectBefore = canvas.getBoundingClientRect();
+  const contentX = (clientX - canvasRectBefore.left) / zoomLevel;
+  const contentY = (clientY - canvasRectBefore.top) / zoomLevel;
+
+  zoomLevel = newZoom;
+  applyZoom();
+
+  // After resizing, figure out where that same content point now sits
+  // relative to the sizer's top-left (pre-scroll), then scroll so it lands
+  // back under the cursor.
+  const vpRect = canvasViewport.getBoundingClientRect();
+  const canvasLeftInSizer = parseFloat(canvas.style.left);
+  const canvasTopInSizer = parseFloat(canvas.style.top);
+  const targetX = canvasLeftInSizer + contentX * zoomLevel;
+  const targetY = canvasTopInSizer + contentY * zoomLevel;
+
+  canvasViewport.scrollLeft = targetX - (clientX - vpRect.left);
+  canvasViewport.scrollTop = targetY - (clientY - vpRect.top);
+}
+
+function resetZoom() {
+  zoomLevel = 1;
+  baseCanvasW = canvas.width;
+  baseCanvasH = canvas.height;
+  applyZoom();
+  canvasViewport.scrollLeft = 0;
+  canvasViewport.scrollTop = 0;
+}
+
+document.getElementById('zoom-in-btn').addEventListener('click', function(e) {
+  e.preventDefault(); e.stopPropagation();
+  if (!imgData) return;
+  const r = canvasViewport.getBoundingClientRect();
+  zoomAt(zoomLevel * ZOOM_STEP, r.left + r.width/2, r.top + r.height/2);
+});
+
+document.getElementById('zoom-out-btn').addEventListener('click', function(e) {
+  e.preventDefault(); e.stopPropagation();
+  if (!imgData) return;
+  const r = canvasViewport.getBoundingClientRect();
+  zoomAt(zoomLevel / ZOOM_STEP, r.left + r.width/2, r.top + r.height/2);
+});
+
+document.getElementById('zoom-reset-btn').addEventListener('click', function(e) {
+  e.preventDefault(); e.stopPropagation();
+  resetZoom();
+});
+
+canvasViewport.addEventListener('wheel', function(e) {
+  if (!imgData) return;
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
+  zoomAt(zoomLevel * factor, e.clientX, e.clientY);
+}, { passive: false });
+
+// ─── CLICK-AND-DRAG PANNING ───────────────────────────────────────────────────
+// Only active once zoomed in (at 100% there's nothing to pan). A drag is
+// distinguished from a click-to-sample by movement distance: if the cursor
+// barely moved between mousedown and mouseup, it still counts as a sample
+// click; otherwise the click is suppressed and treated as a pan.
+let isPanning = false;
+let panMoved = false;
+let panStartX = 0, panStartY = 0;
+let panScrollStartX = 0, panScrollStartY = 0;
+const PAN_CLICK_THRESHOLD = 4; // px of movement below which it still counts as a click
+
+const imageArea = document.getElementById('image-area');
+
+imageArea.addEventListener('mousedown', function(e) {
+  if (!imgData || zoomLevel <= 1) return;
+  isPanning = true;
+  panMoved = false;
+  panStartX = e.clientX;
+  panStartY = e.clientY;
+  panScrollStartX = canvasViewport.scrollLeft;
+  panScrollStartY = canvasViewport.scrollTop;
+});
+
+window.addEventListener('mousemove', function(e) {
+  if (!isPanning) return;
+  const dx = e.clientX - panStartX;
+  const dy = e.clientY - panStartY;
+  if (!panMoved && Math.hypot(dx, dy) > PAN_CLICK_THRESHOLD) {
+    panMoved = true;
+    imageArea.classList.add('panning');
+    [chRing, chH, chV, chDot].forEach(el => el.style.display = 'none');
+  }
+  if (panMoved) {
+    canvasViewport.scrollLeft = panScrollStartX - dx;
+    canvasViewport.scrollTop = panScrollStartY - dy;
+  }
+});
+
+window.addEventListener('mouseup', function() {
+  if (isPanning) {
+    isPanning = false;
+    imageArea.classList.remove('panning');
+    // panMoved stays set through this tick so the click handler (which fires
+    // right after mouseup) can see it and skip sampling for this gesture.
+    setTimeout(() => { panMoved = false; }, 0);
+  }
+});
+
+// ─── TOUCH-AND-DRAG PANNING ────────────────────────────────────────────────────
+// Mirrors the mouse pan handlers above exactly (same threshold, same
+// pan-vs-tap distinction) but driven by touch events. This was previously
+// missing entirely — only touchend (tap-to-sample) existed — which meant
+// panning silently did nothing on touch devices once zoomed in, relying
+// only on incidental native scroll that wasn't reliable across orientations.
+let touchPanId = null; // identifies which finger/touch started the pan, to ignore extra fingers mid-gesture
+
+imageArea.addEventListener('touchstart', function(e) {
+  if (!imgData || zoomLevel <= 1) return;
+  if (e.touches.length !== 1) return; // ignore multi-touch (pinch etc.)
+  const t = e.touches[0];
+  touchPanId = t.identifier;
+  isPanning = true;
+  panMoved = false;
+  panStartX = t.clientX;
+  panStartY = t.clientY;
+  panScrollStartX = canvasViewport.scrollLeft;
+  panScrollStartY = canvasViewport.scrollTop;
+}, { passive: true });
+
+imageArea.addEventListener('touchmove', function(e) {
+  if (!isPanning) return;
+  let t = null;
+  for (let i = 0; i < e.touches.length; i++) {
+    if (e.touches[i].identifier === touchPanId) { t = e.touches[i]; break; }
+  }
+  if (!t) return;
+  const dx = t.clientX - panStartX;
+  const dy = t.clientY - panStartY;
+  if (!panMoved && Math.hypot(dx, dy) > PAN_CLICK_THRESHOLD) {
+    panMoved = true;
+    imageArea.classList.add('panning');
+  }
+  if (panMoved) {
+    e.preventDefault(); // prevent native page/scroll from fighting the pan once we've committed to it
+    canvasViewport.scrollLeft = panScrollStartX - dx;
+    canvasViewport.scrollTop = panScrollStartY - dy;
+  }
+}, { passive: false });
+
+imageArea.addEventListener('touchend', function(e) {
+  if (isPanning) {
+    isPanning = false;
+    touchPanId = null;
+    imageArea.classList.remove('panning');
+    // panMoved stays set through this tick so the tap-to-sample handler
+    // below (also listening for touchend) can see it and skip sampling for
+    // this gesture, mirroring the mouseup/click pair above.
+    setTimeout(() => { panMoved = false; }, 0);
+  }
+});
+
+
+// ─── CROSSHAIR ───────────────────────────────────────────────────────────────
+// Decorative ring/lines overlay shown alongside the real system cursor
+// (never replacing it) — the system cursor is always visible via the CSS
+// `cursor: crosshair` rule on .image-area.has-image, so there is always a
+// reliable, browser-rendered fallback even if this overlay logic doesn't fire.
+const chRing = document.getElementById('ch-ring');
+const chH = document.getElementById('ch-h');
+const chV = document.getElementById('ch-v');
+const chDot = document.getElementById('ch-dot');
+
+imageArea.addEventListener('mousemove', function(e) {
+  if (!imgData) return;
+  if (isPanning) return; // pan handler owns the overlay during a drag
+  const cr = canvas.getBoundingClientRect();
+  const x = e.clientX - cr.left;
+  const y = e.clientY - cr.top;
+  // If outside the actual canvas, hide the overlay (system cursor still shows normally)
+  if (x < 0 || y < 0 || x > cr.width || y > cr.height) {
+    [chRing, chH, chV, chDot].forEach(el => el.style.display = 'none');
+    return;
+  }
+  const ir = imageArea.getBoundingClientRect();
+  const ax = e.clientX - ir.left;
+  const ay = e.clientY - ir.top;
+  [chRing, chH, chV, chDot].forEach(el => {
+    el.style.display = 'block';
+    el.style.left = ax + 'px';
+    el.style.top = ay + 'px';
+  });
+});
+
+imageArea.addEventListener('mouseleave', () => {
+  [chRing, chH, chV, chDot].forEach(el => el.style.display = 'none');
+});
+
+imageArea.addEventListener('click', function(e) {
+  if (!imgData) return;
+  if (panMoved) return; // this click was the tail end of a pan drag, not a sample
+  const cr = canvas.getBoundingClientRect();
+  // Scale from displayed size to actual canvas pixel size
+  const scaleX = canvas.width / cr.width;
+  const scaleY = canvas.height / cr.height;
+  const x = Math.floor((e.clientX - cr.left) * scaleX);
+  const y = Math.floor((e.clientY - cr.top) * scaleY);
+  if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return;
+  const idx = (y * canvas.width + x) * 4;
+  pickColor(imgData.data[idx], imgData.data[idx+1], imgData.data[idx+2]);
+});
+
+imageArea.addEventListener('touchend', function(e) {
+  if (!imgData) return;
+  if (panMoved) return; // this touchend was the tail end of a pan drag, not a tap-to-sample
+  e.preventDefault();
+  const t = e.changedTouches[0];
+  const cr = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / cr.width;
+  const scaleY = canvas.height / cr.height;
+  const x = Math.floor((t.clientX - cr.left) * scaleX);
+  const y = Math.floor((t.clientY - cr.top) * scaleY);
+  if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return;
+  const idx = (y * canvas.width + x) * 4;
+  pickColor(imgData.data[idx], imgData.data[idx+1], imgData.data[idx+2]);
+});
+
+// ─── GLOBAL SLIDER ───────────────────────────────────────────────────────────
+document.getElementById('global-slider').addEventListener('input', function() {
+  globalShift = parseInt(this.value);
+  if (lastR !== null) pickColor(lastR, lastG, lastB);
+});
+
+// ─── COLOR LOGIC ─────────────────────────────────────────────────────────────
+function clamp(v) { return Math.max(0, Math.min(255, Math.round(v))); }
+
+function getPencilRGB(brandName, p) {
+  const key = brandName + ':' + p[0];
+  const cal = calibrations[key] || {r:0,g:0,b:0};
+  return [clamp(p[2]+cal.r), clamp(p[3]+cal.g), clamp(p[4]+cal.b)];
+}
+
+function colorDist(r1,g1,b1,r2,g2,b2) {
+  const dr=r1-r2, dg=g1-g2, db=b1-b2;
+  return Math.sqrt(2*dr*dr + 4*dg*dg + 3*db*db);
+}
+
+function pickColor(r, g, b) {
+  lastR=r; lastG=g; lastB=b;
+  const tr = clamp(r + globalShift);
+  const tg = clamp(g + Math.round(globalShift * 0.3));
+  const tb = clamp(b - globalShift);
+
+  document.getElementById('target-swatch').style.background = `rgb(${tr},${tg},${tb})`;
+  document.getElementById('target-info').textContent = `R ${tr}  G ${tg}  B ${tb}`;
+
+  const maxDist = colorDist(0,0,0,255,255,255);
+  const scroll = document.getElementById('results-scroll');
+
+  if (selectedBrands.size === 0) {
+    scroll.innerHTML = '<div class="empty-results">Select at least one brand above</div>';
+    return;
+  }
+
+  let html = '';
+  selectedBrands.forEach(brandName => {
+    const brand = BRANDS[brandName];
+    if (!brand) return;
+    const scored = brand.pencils.map(p => {
+      const [pr,pg,pb] = getPencilRGB(brandName, p);
+      return { code:p[0], name:p[1], r:pr, g:pg, b:pb, dist:colorDist(tr,tg,tb,pr,pg,pb) };
+    }).sort((a,b) => a.dist-b.dist).slice(0,3);
+
+    const key0 = brandName+':'+scored[0].code;
+    const pct0 = Math.round((1-scored[0].dist/maxDist)*100);
+
+    html += `<div class="brand-group">
+      <div class="brand-group-header">${brand.short} — best match ${pct0}%</div>`;
+
+    scored.forEach((m, i) => {
+      const pct = Math.round((1-m.dist/maxDist)*100);
+      const key = brandName+':'+m.code;
+      const isCal = !!calibrations[key];
+      html += `<div class="match" onclick="openCal('${brandName}','${m.code}')">
+        <span class="match-num">${i+1}</span>
+        <div class="match-swatch" style="background:rgb(${m.r},${m.g},${m.b})">
+          ${isCal ? '<div class="cal-dot"></div>' : ''}
+        </div>
+        <div class="match-info">
+          <div class="match-code">${m.code}</div>
+          <div class="match-name">${m.name}</div>
+        </div>
+        <span class="match-pct">${pct}%</span>
+      </div>`;
+    });
+
+    html += '</div>';
+  });
+
+  scroll.innerHTML = html;
+}
+
+// ─── CALIBRATION ─────────────────────────────────────────────────────────────
+function openCal(brandName, code) {
+  const brand = BRANDS[brandName];
+  if (!brand) return;
+  const pencil = brand.pencils.find(p => p[0] === code);
+  if (!pencil) return;
+  calTarget = { brandName, pencil };
+
+  const key = brandName + ':' + code;
+  const ex = calibrations[key] || {r:0,g:0,b:0};
+
+  document.getElementById('cal-r').value = ex.r;
+  document.getElementById('cal-g').value = ex.g;
+  document.getElementById('cal-b').value = ex.b;
+  document.getElementById('cal-r-val').textContent = ex.r;
+  document.getElementById('cal-g-val').textContent = ex.g;
+  document.getElementById('cal-b-val').textContent = ex.b;
+
+  document.getElementById('cal-title').textContent = `Calibrate ${code} — ${pencil[1]} (${brand.short})`;
+  document.getElementById('cal-app-swatch').style.background = `rgb(${pencil[2]},${pencil[3]},${pencil[4]})`;
+  updateCalPreview();
+  document.getElementById('cal-panel').classList.add('open');
+}
+
+function updateCalPreview() {
+  if (!calTarget) return;
+  const dr = parseInt(document.getElementById('cal-r').value);
+  const dg = parseInt(document.getElementById('cal-g').value);
+  const db = parseInt(document.getElementById('cal-b').value);
+  document.getElementById('cal-r-val').textContent = dr >= 0 ? '+'+dr : dr;
+  document.getElementById('cal-g-val').textContent = dg >= 0 ? '+'+dg : dg;
+  document.getElementById('cal-b-val').textContent = db >= 0 ? '+'+db : db;
+  const p = calTarget.pencil;
+  document.getElementById('cal-adj-swatch').style.background =
+    `rgb(${clamp(p[2]+dr)},${clamp(p[3]+dg)},${clamp(p[4]+db)})`;
+}
+
+['cal-r','cal-g','cal-b'].forEach(id =>
+  document.getElementById(id).addEventListener('input', updateCalPreview)
+);
+
+function saveCal() {
+  if (!calTarget) return;
+  const key = calTarget.brandName + ':' + calTarget.pencil[0];
+  calibrations[key] = {
+    r: parseInt(document.getElementById('cal-r').value),
+    g: parseInt(document.getElementById('cal-g').value),
+    b: parseInt(document.getElementById('cal-b').value)
+  };
+  try { localStorage.setItem('ds_calibrations', JSON.stringify(calibrations)); } catch(e) {}
+  closeCal();
+  if (lastR !== null) pickColor(lastR, lastG, lastB);
+}
+
+function resetCal() {
+  document.getElementById('cal-r').value = 0;
+  document.getElementById('cal-g').value = 0;
+  document.getElementById('cal-b').value = 0;
+  updateCalPreview();
+}
+
+function closeCal() {
+  document.getElementById('cal-panel').classList.remove('open');
+  calTarget = null;
+}
+
+// ─── BACKGROUND TOGGLE ───────────────────────────────────────────────────────
+document.getElementById('bg-toggle').addEventListener('click', function(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  const area = document.getElementById('image-area');
+  area.classList.toggle('light-bg');
+});
+
+// ─── RESET / NEW IMAGE ───────────────────────────────────────────────────────
+document.getElementById('reset-btn').addEventListener('click', function(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  const canvas = document.getElementById('canvas');
+  const prompt = document.getElementById('upload-prompt');
+  const scroll = document.getElementById('results-scroll');
+  canvas.style.display = 'none';
+  prompt.style.display = 'block';
+  imgData = null;
+  lastR = null; lastG = null; lastB = null;
+  document.getElementById('image-area').classList.remove('has-image');
+  document.getElementById('target-swatch').style.background = 'var(--bg-panel-alt)';
+  document.getElementById('target-info').textContent = 'Tap your image to pick a color';
+  scroll.innerHTML = '<div class="empty-results">Select brands above<br>then tap your image</div>';
+  document.getElementById('ch-ring').style.display = 'none';
+  document.getElementById('ch-h').style.display = 'none';
+  document.getElementById('ch-v').style.display = 'none';
+  document.getElementById('ch-dot').style.display = 'none';
+  resetZoom();
+  closeCal();
+  clearSavedImage();
+});
+
+restoreSavedImageIfEnabled();
+</script>
+</body>
+</html>
