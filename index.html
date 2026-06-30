@@ -580,10 +580,10 @@
     position: relative;
   }
 
-  /* Global display adjustment: a pure on-screen filter applied to colour
-     swatches and the image so the tool can be made to suit any monitor. It
-     does not affect the underlying colour values or the matching maths. */
-  .match-swatch, .target-swatch, .cal-swatch, #canvas {
+  /* Global display adjustment: a pure on-screen filter applied to the colour
+     swatches only — NOT the reference image, which must stay true so colour
+     picks remain accurate. Does not affect matching or saved pencil data. */
+  .match-swatch, .target-swatch, .cal-swatch {
     filter: var(--display-filter, none);
   }
   .global-hint {
