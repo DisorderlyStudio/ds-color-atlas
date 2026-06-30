@@ -1026,7 +1026,9 @@
   html[data-view="phone"] .toolbar-extra .menu-only,
   html[data-view="ipad"] .toolbar-extra .menu-only { display: block; width: 100%; }
   html[data-view="phone"] #export-btn,
-  html[data-view="ipad"] #export-btn { display: none !important; }
+  html[data-view="ipad"] #export-btn,
+  html[data-view="phone"] #import-btn,
+  html[data-view="ipad"] #import-btn { display: none !important; }
   .source-note {
     font-size: 0.72rem;
     color: var(--text-secondary);
@@ -1117,6 +1119,7 @@
             <div class="remember-toggle" id="remember-toggle"></div>
           </div>
           <button class="toolbar-btn menu-only" id="export-btn-m" onclick="exportCalibrations()">Export my settings</button>
+          <button class="toolbar-btn menu-only" id="import-btn-m" onclick="document.getElementById('import-input').click()">Import my settings</button>
         </div>
       </div>
     </div>
@@ -1147,6 +1150,8 @@
         </div>
         <div class="source-note" id="source-note"></div>
         <button class="source-mini-btn ghost" id="export-btn" onclick="exportCalibrations()">Export my settings</button>
+        <button class="source-mini-btn ghost" id="import-btn" onclick="document.getElementById('import-input').click()">Import my settings</button>
+        <input type="file" id="import-input" accept="application/json,.json" style="display:none" onchange="importCalibrations(this)">
         <button class="source-mini-btn" id="apply-all-btn" style="display:none;" onclick="applyAllPresets()">Copy all to my settings</button>
       </div>
 
@@ -3183,6 +3188,8 @@ function updateSourceUI() {
   document.getElementById('src-studio-btn').classList.toggle('active', studio);
   // Export button only matters for your OWN settings; Copy-all only in studio view.
   document.getElementById('export-btn').style.display = studio ? 'none' : '';
+  const impBtn = document.getElementById('import-btn');
+  if (impBtn) impBtn.style.display = studio ? 'none' : '';
   document.getElementById('apply-all-btn').style.display = studio ? '' : 'none';
 
   const note = document.getElementById('source-note');
@@ -3243,6 +3250,41 @@ function exportCalibrations() {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+
+// Load a previously exported settings file back into the user's own
+// calibrations (backup restore, or moving your tuning to another device).
+// Merges onto whatever you already have. Never touches anyone else's data —
+// it only reads the file you choose and writes to your own local settings.
+function importCalibrations(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function() {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('shape');
+      let count = 0;
+      for (const key in data) {
+        const v = data[key];
+        if (v && typeof v.r === 'number' && typeof v.g === 'number' && typeof v.b === 'number') {
+          calibrations[key] = { r: v.r, g: v.g, b: v.b };
+          count++;
+        }
+      }
+      if (!count) { alert('No calibrated pencils were found in that file.'); }
+      else {
+        try { localStorage.setItem('ds_calibrations', JSON.stringify(calibrations)); } catch(e) {}
+        updateSourceUI();
+        if (lastR !== null) pickColor(lastR, lastG, lastB);
+        alert('Imported ' + count + ' calibrated pencil' + (count === 1 ? '' : 's') + ' into your settings.');
+      }
+    } catch (e) {
+      alert('That file doesn\u2019t look like a settings file exported from this tool. Choose the .json you saved with Export.');
+    }
+    input.value = ''; // let the same file be re-chosen later
+  };
+  reader.readAsText(file);
+}
 
 // ─── BACKGROUND TOGGLE ───────────────────────────────────────────────────────
 document.getElementById('bg-toggle').addEventListener('click', function(e) {
