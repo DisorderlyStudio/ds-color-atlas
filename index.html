@@ -218,6 +218,36 @@
   #canvas { display: none; cursor: none; position: absolute; }
   .image-area.panning #canvas { cursor: grabbing; }
 
+  /* ── FIXED CENTER CROSSHAIR (phone/iPad) ──────────────────────────────────
+     Sits at the middle of the image viewport and never moves; JS positions the
+     parent at the viewport centre, and each child centres itself on that point.
+     Hidden on desktop (mouse is already a precise pointer) and until an image
+     is loaded. */
+  .center-ch { display: none; position: absolute; pointer-events: none; z-index: 6; }
+  html[data-view="phone"] .image-area.has-image .center-ch,
+  html[data-view="ipad"] .image-area.has-image .center-ch { display: block; }
+  .center-ch > div { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); }
+  .center-ch-ring {
+    width: 56px; height: 56px;
+    border: 1.5px solid rgba(0,0,0,0.85);
+    border-radius: 50%;
+    box-shadow: 0 0 0 1.5px rgba(255,255,255,0.9), inset 0 0 0 1.5px rgba(255,255,255,0.5);
+  }
+  .center-ch-h {
+    width: 56px; height: 1.5px; background: rgba(0,0,0,0.85);
+    box-shadow: 0 0.5px 0 rgba(255,255,255,0.7), 0 -0.5px 0 rgba(255,255,255,0.7);
+  }
+  .center-ch-v {
+    width: 1.5px; height: 56px; background: rgba(0,0,0,0.85);
+    box-shadow: 0.5px 0 0 rgba(255,255,255,0.7), -0.5px 0 0 rgba(255,255,255,0.7);
+  }
+  .center-ch-dot {
+    width: 5px; height: 5px;
+    background: rgba(255,255,255,0.95);
+    border: 1px solid rgba(0,0,0,0.85);
+    border-radius: 50%;
+  }
+
   .zoom-controls {
     display: flex;
     align-items: center;
@@ -1372,6 +1402,15 @@
     <div class="ch-h" id="ch-h"></div>
     <div class="ch-v" id="ch-v"></div>
     <div class="ch-dot" id="ch-dot"></div>
+    <!-- Fixed center crosshair (phone/iPad only): the sample point stays put in
+         the middle of the screen and the user drags the image underneath it, so
+         a fingertip never covers the spot being picked. -->
+    <div class="center-ch" id="center-ch" aria-hidden="true">
+      <div class="center-ch-ring"></div>
+      <div class="center-ch-h"></div>
+      <div class="center-ch-v"></div>
+      <div class="center-ch-dot"></div>
+    </div>
     <input type="file" id="file-input" accept="image/*">
   </div>
 
@@ -3021,6 +3060,79 @@ const canvasSizer = document.getElementById('canvas-sizer');
 let baseCanvasW = 0, baseCanvasH = 0; // canvas's displayed CSS size at 100% zoom (fits the viewport)
 let baseDisplayW = 0, baseDisplayH = 0; // same as above; set on image load, used by resetZoom
 
+// ─── CENTER-CROSSHAIR PICKING (phone/iPad) ───────────────────────────────────
+// On touch, the sample point is fixed in the middle of the viewport and the
+// user drags the image under it (so a fingertip never covers the spot). The
+// padded sizer (see applyZoom) lets any pixel be moved to the centre, even at
+// 100%. Desktop is untouched and keeps click-to-pick.
+const IS_TOUCH_VIEW = (function () {
+  const v = document.documentElement.getAttribute('data-view');
+  return v === 'phone' || v === 'ipad';
+})();
+const centerCh = document.getElementById('center-ch');
+let centerPreviewRaf = 0;
+
+// Place the fixed crosshair at the centre of the image viewport.
+function positionCenterCrosshair() {
+  if (!IS_TOUCH_VIEW || !centerCh) return;
+  const area = document.getElementById('image-area');
+  const vpRect = canvasViewport.getBoundingClientRect();
+  const irRect = area.getBoundingClientRect();
+  centerCh.style.left = (vpRect.left - irRect.left + vpRect.width / 2) + 'px';
+  centerCh.style.top = (vpRect.top - irRect.top + vpRect.height / 2) + 'px';
+}
+
+// Scroll so a canvas content point (CSS px from the canvas top-left at the
+// current zoom) lands under the viewport centre.
+function centerContentPoint(contentX, contentY) {
+  const vpW = canvasViewport.clientWidth, vpH = canvasViewport.clientHeight;
+  const canvasLeftInSizer = parseFloat(canvas.style.left) || 0;
+  const canvasTopInSizer = parseFloat(canvas.style.top) || 0;
+  canvasViewport.scrollLeft = canvasLeftInSizer + contentX - vpW / 2;
+  canvasViewport.scrollTop = canvasTopInSizer + contentY - vpH / 2;
+}
+
+// Which full-res canvas pixel is under the viewport centre right now.
+function centerCanvasPixel() {
+  if (!imgData) return null;
+  const vpRect = canvasViewport.getBoundingClientRect();
+  const cx = vpRect.left + vpRect.width / 2;
+  const cy = vpRect.top + vpRect.height / 2;
+  const cr = canvas.getBoundingClientRect();
+  const x = Math.floor((cx - cr.left) * (canvas.width / cr.width));
+  const y = Math.floor((cy - cr.top) * (canvas.height / cr.height));
+  if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return null;
+  return { x, y };
+}
+
+// Cheap live update of just the selected-colour chip while dragging/zooming
+// (no re-ranking, so it stays smooth). Coalesced to one update per frame.
+function previewCenter() {
+  if (!IS_TOUCH_VIEW || !imgData) return;
+  if (centerPreviewRaf) return;
+  centerPreviewRaf = requestAnimationFrame(function () {
+    centerPreviewRaf = 0;
+    const p = centerCanvasPixel();
+    if (!p) return;
+    const idx = (p.y * canvas.width + p.x) * 4;
+    const r = imgData.data[idx], g = imgData.data[idx + 1], b = imgData.data[idx + 2];
+    const sw = document.getElementById('target-swatch');
+    const info = document.getElementById('target-info');
+    if (sw) sw.style.background = `rgb(${r},${g},${b})`;
+    if (info) info.textContent = `R ${r}  G ${g}  B ${b}`;
+  });
+}
+
+// Commit the centre pixel as a full pick (scores + renders matches).
+function commitCenter() {
+  if (!IS_TOUCH_VIEW || !imgData) return;
+  const p = centerCanvasPixel();
+  if (!p) return;
+  const idx = (p.y * canvas.width + p.x) * 4;
+  pickColor(imgData.data[idx], imgData.data[idx + 1], imgData.data[idx + 2]);
+}
+
+
 function applyZoom() {
   const w = baseCanvasW * zoomLevel, h = baseCanvasH * zoomLevel;
   const vpW = canvasViewport.clientWidth, vpH = canvasViewport.clientHeight;
@@ -3029,8 +3141,11 @@ function applyZoom() {
   // genuine room to scroll the canvas fully into view from any edge —
   // including all the way to its true top-left — regardless of how the
   // browser would otherwise handle centering an overflowing element.
-  const sizerW = Math.max(vpW, w);
-  const sizerH = Math.max(vpH, h);
+  // On touch, pad the scroll area by a full viewport (half on each side) so any
+  // pixel — including the very edges — can be dragged to the centre crosshair,
+  // even at 100% zoom. Desktop keeps the tight "just big enough" sizer.
+  const sizerW = IS_TOUCH_VIEW ? (w + vpW) : Math.max(vpW, w);
+  const sizerH = IS_TOUCH_VIEW ? (h + vpH) : Math.max(vpH, h);
   canvasSizer.style.width = sizerW + 'px';
   canvasSizer.style.height = sizerH + 'px';
 
@@ -3044,6 +3159,10 @@ function applyZoom() {
   canvas.style.height = h + 'px';
 
   document.getElementById('zoom-pct').textContent = Math.round(zoomLevel * 100) + '%';
+
+  // Keep the fixed crosshair centred and the chip live whenever layout changes.
+  positionCenterCrosshair();
+  previewCenter();
 }
 
 function zoomAt(newZoom, clientX, clientY) {
@@ -3078,8 +3197,19 @@ function resetZoom() {
   baseCanvasW = baseDisplayW;
   baseCanvasH = baseDisplayH;
   applyZoom();
-  canvasViewport.scrollLeft = 0;
-  canvasViewport.scrollTop = 0;
+  if (IS_TOUCH_VIEW) {
+    // Start with the image centred under the fixed crosshair, then seed a pick
+    // so matches appear immediately. rAF lets the scroll/layout settle first.
+    centerContentPoint(baseCanvasW / 2, baseCanvasH / 2);
+    positionCenterCrosshair();
+    requestAnimationFrame(function () {
+      positionCenterCrosshair();
+      commitCenter();
+    });
+  } else {
+    canvasViewport.scrollLeft = 0;
+    canvasViewport.scrollTop = 0;
+  }
 }
 
 document.getElementById('zoom-in-btn').addEventListener('click', function(e) {
@@ -3165,7 +3295,10 @@ window.addEventListener('mouseup', function() {
 let touchPanId = null; // identifies which finger/touch started the pan, to ignore extra fingers mid-gesture
 
 imageArea.addEventListener('touchstart', function(e) {
-  if (!imgData || zoomLevel <= 1) return;
+  if (!imgData) return;
+  // On touch we pan at every zoom (the padded sizer gives room even at 100%);
+  // on a stray touch-capable desktop, keep the old zoom>1 rule.
+  if (zoomLevel <= 1 && !IS_TOUCH_VIEW) return;
   if (e.target.closest && e.target.closest('.image-toolbar')) return; // let toolbar buttons handle their own taps
   if (e.touches.length !== 1) return; // ignore multi-touch (pinch etc.)
   const t = e.touches[0];
@@ -3195,6 +3328,7 @@ imageArea.addEventListener('touchmove', function(e) {
     e.preventDefault(); // prevent native page/scroll from fighting the pan once we've committed to it
     canvasViewport.scrollLeft = panScrollStartX - dx;
     canvasViewport.scrollTop = panScrollStartY - dy;
+    if (IS_TOUCH_VIEW) previewCenter(); // live colour under the crosshair while dragging
   }
 }, { passive: false });
 
@@ -3242,9 +3376,18 @@ imageArea.addEventListener('touchmove', function(e) {
   if (!pinchActive || e.touches.length < 2 || pinchStartDist <= 0) return;
   e.preventDefault();
   const dist = touchDist(e.touches[0], e.touches[1]);
-  const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-  const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-  zoomAt(pinchStartZoom * (dist / pinchStartDist), midX, midY);
+  let anchorX, anchorY;
+  if (IS_TOUCH_VIEW) {
+    // Zoom around the fixed crosshair so the sampled spot stays under it.
+    const vpRect = canvasViewport.getBoundingClientRect();
+    anchorX = vpRect.left + vpRect.width / 2;
+    anchorY = vpRect.top + vpRect.height / 2;
+  } else {
+    anchorX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+    anchorY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+  }
+  zoomAt(pinchStartZoom * (dist / pinchStartDist), anchorX, anchorY);
+  if (IS_TOUCH_VIEW) previewCenter();
 }, { passive: false });
 
 imageArea.addEventListener('touchend', function(e) {
@@ -3294,6 +3437,7 @@ imageArea.addEventListener('mouseleave', () => {
 
 imageArea.addEventListener('click', function(e) {
   if (!imgData) return;
+  if (IS_TOUCH_VIEW) return; // touch views pick via the centre crosshair, not the tap point
   if (panMoved) return; // this click was the tail end of a pan drag, not a sample
   const cr = canvas.getBoundingClientRect();
   // Scale from displayed size to actual canvas pixel size
@@ -3308,6 +3452,7 @@ imageArea.addEventListener('click', function(e) {
 
 imageArea.addEventListener('touchend', function(e) {
   if (!imgData) return;
+  if (IS_TOUCH_VIEW) return; // touch views sample the centre crosshair instead (handler below)
   if (e.target.closest && e.target.closest('.image-toolbar')) return; // toolbar taps are not colour samples; leave the button's click intact
   if (panMoved) return; // this touchend was the tail end of a pan drag, not a tap-to-sample
   e.preventDefault();
@@ -3331,6 +3476,22 @@ imageArea.addEventListener('touchend', function(e) {
     el.style.left = mx + 'px';
     el.style.top = my + 'px';
   });
+});
+
+// CENTER-CROSSHAIR COMMIT (phone/iPad): once every finger has lifted — after a
+// pan, a pinch, or just a tap — lock in whatever sits under the crosshair as a
+// full pick. Runs only on touch views.
+imageArea.addEventListener('touchend', function(e) {
+  if (!IS_TOUCH_VIEW || !imgData) return;
+  if (e.target.closest && e.target.closest('.image-toolbar')) return; // toolbar taps aren't picks
+  if (e.touches.length > 0) return; // still mid-gesture; wait for the last finger
+  commitCenter();
+});
+
+// Keep the fixed crosshair centred when the screen rotates or resizes.
+window.addEventListener('resize', function() {
+  if (!IS_TOUCH_VIEW) return;
+  positionCenterCrosshair();
 });
 
 // ─── GLOBAL DISPLAY ADJUSTMENT (vividness only) ──────────────────────────────
