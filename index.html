@@ -1191,6 +1191,40 @@
     justify-content: space-between; width: 100%;
   }
 
+  /* The ⋯ menu is a dark dropdown in BOTH Light and Dark mode. Without this,
+     switching to Light flips the menu's text dark (via the .light-bg rules) so
+     it disappears against the dark menu — the "all the print is grey" bug.
+     Force the menu's contents to stay light. Scoped to touch layouts only, so
+     the desktop toolbar (which sits on the light image) keeps its dark text. */
+  html[data-view="phone"] .image-area.light-bg .toolbar-extra .toolbar-btn,
+  html[data-view="ipad"] .image-area.light-bg .toolbar-extra .toolbar-btn {
+    background: rgba(255,255,255,0.15);
+    border-color: rgba(255,255,255,0.35);
+    color: rgba(255,255,255,0.9);
+  }
+  html[data-view="phone"] .image-area.light-bg .toolbar-extra .toolbar-btn:hover,
+  html[data-view="ipad"] .image-area.light-bg .toolbar-extra .toolbar-btn:hover {
+    background: rgba(255,255,255,0.28);
+  }
+  html[data-view="phone"] .image-area.light-bg .toolbar-extra .remember-toggle-label,
+  html[data-view="ipad"] .image-area.light-bg .toolbar-extra .remember-toggle-label {
+    color: rgba(255,255,255,0.85);
+  }
+  html[data-view="phone"] .image-area.light-bg .toolbar-extra .remember-toggle,
+  html[data-view="ipad"] .image-area.light-bg .toolbar-extra .remember-toggle {
+    border-color: rgba(255,255,255,0.35);
+    background: rgba(255,255,255,0.15);
+  }
+  html[data-view="phone"] .image-area.light-bg .toolbar-extra .remember-toggle.on,
+  html[data-view="ipad"] .image-area.light-bg .toolbar-extra .remember-toggle.on {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  html[data-view="phone"] .image-area.light-bg .toolbar-extra .remember-toggle::after,
+  html[data-view="ipad"] .image-area.light-bg .toolbar-extra .remember-toggle::after {
+    background: rgba(255,255,255,0.9);
+  }
+
   /* ── COLLAPSIBLE SECTIONS (all views) ──────────────────────────────────────
      Secondary controls collapse to a single tappable header so the panel
      stays tidy. Tap the label to open/close. */
