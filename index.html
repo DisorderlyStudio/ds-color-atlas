@@ -486,13 +486,21 @@
 
   input[type=range] {
     flex: 1;
-    height: 2px;
-    background: linear-gradient(to right, #4a7ab5, #ccc, #c8714a);
+    height: 3px;
+    background: #cfcfcf;
+    border-radius: 2px;
     outline: none;
     border: none;
     cursor: pointer;
     -webkit-appearance: none;
   }
+
+  /* Each global slider gets a track that matches what it does, so it's not
+     misleading (warm/cool = blue→orange, brightness = dark→light,
+     vividness = grey→colourful). Other sliders keep the neutral grey track. */
+  #global-slider { background: linear-gradient(to right, #4a7ab5, #ccc, #c8714a); }
+  #global-bright { background: linear-gradient(to right, #555, #e9e9e9); }
+  #global-sat    { background: linear-gradient(to right, #b4b4b4, #ff2d95); }
 
   input[type=range]::-webkit-slider-thumb {
     -webkit-appearance: none;
