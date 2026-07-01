@@ -1528,6 +1528,8 @@
   html[data-view="phone"] .info-dot,
   html[data-view="ipad"] .info-dot { width: 22px; height: 22px; font-size: 0.86rem; }
   .info-row { display: flex; align-items: center; gap: 0.4rem; }
+  .source-toggle-row { display: flex; align-items: center; gap: 0.55rem; }
+  .source-toggle-row .source-toggle { flex: 1; min-width: 0; }
   .info-row-label { font-size: 0.72rem; font-weight: 700; color: var(--text-muted); }
   html[data-view="phone"] .info-row-label,
   html[data-view="ipad"] .info-row-label { font-size: 0.82rem; }
@@ -1623,12 +1625,11 @@
 
       <!-- Calibration source: My settings vs Disorderly Studio presets -->
       <div class="panel-section source-section">
-        <div class="source-toggle">
-          <button class="source-btn active" id="src-mine-btn" onclick="setCalSource('mine')">My settings</button>
-          <button class="source-btn" id="src-studio-btn" onclick="setCalSource('studio')">Disorderly Studio</button>
-        </div>
-        <div class="info-row">
-          <span class="info-row-label">Whose settings am I using?</span>
+        <div class="source-toggle-row">
+          <div class="source-toggle">
+            <button class="source-btn active" id="src-mine-btn" onclick="setCalSource('mine')">My settings</button>
+            <button class="source-btn" id="src-studio-btn" onclick="setCalSource('studio')">Disorderly Studio</button>
+          </div>
           <button class="info-dot" data-tip="&quot;My settings&quot; are your own calibrations, saved on this device. &quot;Disorderly Studio&quot; is a shared set you can browse and copy from — it never changes your own.">i</button>
         </div>
         <div class="source-note" id="source-note"></div>
