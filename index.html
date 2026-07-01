@@ -1458,6 +1458,93 @@
   html[data-view="ipad"] .remember-toggle-label {
     font-size: 0.82rem;
   }
+  /* ── HELP BUTTON + HOW-TO OVERLAY + INFO TIPS ─────────────────────────────── */
+  .help-btn {
+    font-weight: 800;
+    min-width: 30px;
+    border-radius: 50% !important;
+    padding: 0.28rem 0 !important;
+    text-align: center;
+  }
+  html[data-view="phone"] .help-btn,
+  html[data-view="ipad"] .help-btn { min-width: 36px; font-size: 0.95rem; }
+
+  .help-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 200; display: none;
+  }
+  .help-backdrop.open { display: block; }
+  .help-panel {
+    position: fixed; z-index: 201;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(520px, 92vw);
+    max-height: 86vh; overflow-y: auto;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+    display: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .help-panel.open { display: block; }
+  .help-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+    padding: 1rem 1.2rem;
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0;
+    background: var(--bg-panel);
+  }
+  .help-title { font-weight: 800; font-size: 1rem; color: var(--accent); letter-spacing: 0.02em; }
+  .help-close {
+    border: none; background: transparent; cursor: pointer;
+    font-size: 1.7rem; line-height: 1; color: var(--text-muted);
+    padding: 0 0.3rem;
+  }
+  .help-close:hover { color: var(--text-primary); }
+  .help-body { padding: 1rem 1.2rem 1.4rem; }
+  .help-intro { font-size: 0.92rem; font-weight: 600; color: var(--text-secondary); margin: 0 0 0.9rem; line-height: 1.5; }
+  .help-steps { margin: 0; padding-left: 1.4rem; }
+  .help-steps li { font-size: 0.9rem; color: var(--text-primary); line-height: 1.5; margin-bottom: 0.75rem; font-weight: 500; }
+  .help-steps li b { color: var(--accent); font-weight: 800; }
+  .help-steps li i { font-style: normal; font-weight: 700; }
+  .help-tip-note { margin: 1.1rem 0 0; font-size: 0.82rem; color: var(--text-muted); font-weight: 600; line-height: 1.6; }
+
+  .help-i, .info-dot {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.72rem; font-weight: 800; font-style: normal;
+    font-family: 'Quicksand', sans-serif;
+  }
+  .info-dot {
+    border: none; cursor: pointer; padding: 0;
+    vertical-align: middle; margin-left: 0.2rem;
+    flex: 0 0 auto;
+  }
+  html[data-view="phone"] .info-dot,
+  html[data-view="ipad"] .info-dot { width: 22px; height: 22px; font-size: 0.86rem; }
+  .info-row { display: flex; align-items: center; gap: 0.4rem; }
+  .info-row-label { font-size: 0.72rem; font-weight: 700; color: var(--text-muted); }
+  html[data-view="phone"] .info-row-label,
+  html[data-view="ipad"] .info-row-label { font-size: 0.82rem; }
+
+  .info-pop {
+    position: fixed; z-index: 210; display: none;
+    max-width: 260px;
+    background: #1f1c1c; color: #fff;
+    font-size: 0.82rem; font-weight: 600; line-height: 1.45;
+    padding: 0.6rem 0.75rem;
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+  }
+  .info-pop.open { display: block; }
+  html[data-view="phone"] .info-pop,
+  html[data-view="ipad"] .info-pop { font-size: 0.9rem; max-width: 78vw; }
+
 </style>
 </head>
 <body>
@@ -1492,6 +1579,7 @@
           <button class="toolbar-btn" id="zoom-reset-btn">Reset Zoom</button>
         </div>
         <button class="toolbar-btn" id="reset-btn">New Image</button>
+        <button class="toolbar-btn help-btn" id="help-btn" aria-label="How to use">?</button>
         <button class="toolbar-btn more-btn" id="more-btn" aria-label="More options">⋯</button>
         <div class="toolbar-extra" id="toolbar-extra">
           <button class="toolbar-btn" id="bg-toggle">Dark / Light</button>
@@ -1539,6 +1627,10 @@
           <button class="source-btn active" id="src-mine-btn" onclick="setCalSource('mine')">My settings</button>
           <button class="source-btn" id="src-studio-btn" onclick="setCalSource('studio')">Disorderly Studio</button>
         </div>
+        <div class="info-row">
+          <span class="info-row-label">Whose settings am I using?</span>
+          <button class="info-dot" data-tip="&quot;My settings&quot; are your own calibrations, saved on this device. &quot;Disorderly Studio&quot; is a shared set you can browse and copy from — it never changes your own.">i</button>
+        </div>
         <div class="source-note" id="source-note"></div>
         <button class="source-mini-btn" id="share-btn" onclick="shareSettings()">Share my settings to another device</button>
         <button class="source-mini-btn ghost" id="export-btn" onclick="exportCalibrations()">Save to a file (backup)</button>
@@ -1549,7 +1641,7 @@
 
       <!-- My calibrated pencils -->
       <div class="panel-section collapsible collapsed" id="cal-list-section">
-        <div class="panel-label">My calibrated pencils <span class="cal-count" id="cal-list-count"></span></div>
+        <div class="panel-label">My calibrated pencils <span class="cal-count" id="cal-list-count"></span> <button class="info-dot" data-tip="Every pencil you've tuned shows up here. Tap one to reopen it, or tap Reset to put it back to normal — handy if a big change ever makes a pencil seem to disappear from the matches.">i</button></div>
         <div class="cal-list-empty" id="cal-list-empty">You haven't changed any pencils yet. Tap a match below and Save to tune one — it'll show up here so you can always find or undo it.</div>
         <div id="cal-list"></div>
         <button class="source-mini-btn ghost" id="cal-reset-all-btn" onclick="resetAllCalibrations()" style="margin-top:0.7rem; display:none;">Reset all my pencils</button>
@@ -1571,7 +1663,7 @@
 
       <!-- Screen vividness -->
       <div class="panel-section collapsible collapsed" id="vividness-section">
-        <div class="panel-label">Vividness</div>
+        <div class="panel-label">Vividness <button class="info-dot" data-tip="Makes the pencil swatches look more or less colorful on your screen only. It does NOT change the matches or your reference photo — it's just to help them look right on your display.">i</button></div>
         <div class="slider-row">
           <span class="slider-label">Muted</span>
           <input type="range" id="global-sat" min="-80" max="80" value="0" step="1">
@@ -1591,7 +1683,7 @@
       </div>
 
       <div class="panel-section" style="padding-bottom:0.5rem;">
-        <div class="panel-label">Closest matches — tap any to calibrate</div>
+        <div class="panel-label">Closest matches — tap any to calibrate <button class="info-dot" data-tip="Tap any match to nudge that pencil's color so it matches the real pencil in your hand. Your changes are saved on this device and make future matches more accurate.">i</button></div>
       </div>
 
     </div>
@@ -1616,6 +1708,28 @@
   <input type="range" id="global-sat-phone" min="-80" max="80" value="0" step="1" aria-label="Vividness">
   <span class="vivid-bar-end">Vivid</span>
   <button class="vivid-bar-reset" id="vivid-bar-reset" onclick="resetGlobalAdjustments()">Reset</button>
+</div>
+
+<!-- HELP / HOW-TO OVERLAY -->
+<div class="help-backdrop" id="help-backdrop"></div>
+<div class="help-panel" id="help-panel" role="dialog" aria-label="How to use the D.S. Color Atlas">
+  <div class="help-head">
+    <span class="help-title">How to use the D.S. Color Atlas</span>
+    <button class="help-close" id="help-close" aria-label="Close">&times;</button>
+  </div>
+  <div class="help-body">
+    <p class="help-intro">Match any color in a photo to your real colored pencils. Here's the quick version:</p>
+    <ol class="help-steps">
+      <li><b>Choose your brands.</b> Tap <i>Select your brands</i> and check the pencils you own. You can add more anytime.</li>
+      <li><b>Add a photo.</b> Tap <i>Upload</i> and pick a reference picture.</li>
+      <li><b>Pick a color.</b> On a computer, click a spot in the photo. On iPhone/iPad, drag the photo so the color sits under the center crosshair.</li>
+      <li><b>See your matches.</b> The closest pencils in each brand appear, ranked with a match percentage.</li>
+      <li><b>Fine-tune a pencil.</b> Tap a match to open calibration, then nudge R/G/B, brightness, or vividness until the swatch matches the real pencil in your hand.</li>
+      <li><b>Save it.</b> Tap <i>Save pencil</i>. Your change sticks, so future matches are more accurate.</li>
+      <li><b>Copy to another device.</b> Use <i>Share my settings</i> to send your tuning to your iPad or iPhone in a tap.</li>
+    </ol>
+    <p class="help-tip-note">Look for the small <span class="help-i">i</span> icons around the app for quick tips on the trickier bits.</p>
+  </div>
 </div>
 
 <!-- CALIBRATION PANEL -->
@@ -4189,6 +4303,55 @@ document.querySelectorAll('.panel-section.collapsible > .panel-label').forEach(f
     this.parentElement.classList.toggle('collapsed');
   });
 });
+
+// ─── HELP / HOW-TO OVERLAY ───────────────────────────────────────────────────
+(function () {
+  const btn = document.getElementById('help-btn');
+  const bd = document.getElementById('help-backdrop');
+  const panel = document.getElementById('help-panel');
+  const closeBtn = document.getElementById('help-close');
+  function openHelp(e) { if (e) { e.preventDefault(); e.stopPropagation(); } bd.classList.add('open'); panel.classList.add('open'); }
+  function closeHelp() { bd.classList.remove('open'); panel.classList.remove('open'); }
+  if (btn) btn.addEventListener('click', openHelp);
+  if (closeBtn) closeBtn.addEventListener('click', closeHelp);
+  if (bd) bd.addEventListener('click', closeHelp);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeHelp(); });
+})();
+
+// ─── INFO TOOLTIPS (tap-to-open bubbles on the little "i" dots) ───────────────
+(function () {
+  const pop = document.createElement('div');
+  pop.className = 'info-pop';
+  pop.id = 'info-pop';
+  document.body.appendChild(pop);
+  let openDot = null;
+  function hide() { pop.classList.remove('open'); openDot = null; }
+  // Capture phase so tapping a dot inside a collapsible header shows the tip
+  // instead of toggling the section, and doesn't get swallowed by other handlers.
+  document.addEventListener('click', function (e) {
+    const dot = e.target.closest ? e.target.closest('.info-dot') : null;
+    if (dot) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (openDot === dot) { hide(); return; }
+      openDot = dot;
+      pop.textContent = dot.getAttribute('data-tip') || '';
+      pop.classList.add('open');
+      const r = dot.getBoundingClientRect();
+      const pw = pop.offsetWidth, ph = pop.offsetHeight;
+      let left = r.left + r.width / 2 - pw / 2;
+      left = Math.max(8, Math.min(left, window.innerWidth - pw - 8));
+      let top = r.bottom + 8;
+      if (top + ph > window.innerHeight - 8) top = r.top - ph - 8;
+      pop.style.left = left + 'px';
+      pop.style.top = top + 'px';
+      return;
+    }
+    if (!pop.contains(e.target)) hide();
+  }, true);
+  window.addEventListener('resize', hide);
+  window.addEventListener('scroll', hide, true);
+})();
 
 // ─── RESET / NEW IMAGE ───────────────────────────────────────────────────────
 document.getElementById('reset-btn').addEventListener('click', function(e) {
