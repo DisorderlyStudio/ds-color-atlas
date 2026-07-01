@@ -89,7 +89,7 @@
     font-weight: 700;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: rgba(255,255,255,0.8);
+    color: #ffffff;
   }
 
   .image-area.light-bg .toolbar-label { color: #333; }
@@ -887,7 +887,7 @@
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: rgba(255,255,255,0.8);
+    color: #ffffff;
     white-space: nowrap;
   }
   .image-area.light-bg .remember-toggle-label { color: #333; }
@@ -1250,7 +1250,7 @@
   /* Inside the menu there's always room for the label and a comfortable row. */
   html[data-view="phone"] .toolbar-extra .remember-toggle-label,
   html[data-view="ipad"] .toolbar-extra .remember-toggle-label {
-    display: inline; font-size: 0.62rem; color: rgba(255,255,255,0.85);
+    display: inline; font-size: 0.62rem; color: #ffffff;
   }
   html[data-view="phone"] .toolbar-extra .remember-toggle-wrap,
   html[data-view="ipad"] .toolbar-extra .remember-toggle-wrap {
@@ -1601,6 +1601,7 @@
     <div class="image-toolbar">
       <span class="toolbar-label">D.S. Color Compass</span>
       <div style="display:flex;gap:0.5rem;align-items:center;">
+        <button class="toolbar-btn help-btn" id="help-btn" aria-label="How to use">?</button>
         <div class="zoom-controls" id="zoom-controls">
           <button class="toolbar-btn zoom-btn" id="zoom-out-btn">−</button>
           <span class="zoom-pct" id="zoom-pct">100%</span>
@@ -1608,7 +1609,6 @@
           <button class="toolbar-btn" id="zoom-reset-btn">Reset Zoom</button>
         </div>
         <button class="toolbar-btn" id="reset-btn">New Image</button>
-        <button class="toolbar-btn help-btn" id="help-btn" aria-label="How to use">?</button>
         <button class="toolbar-btn more-btn" id="more-btn" aria-label="More options">⋯</button>
         <div class="toolbar-extra" id="toolbar-extra">
           <button class="toolbar-btn" id="bg-toggle">Dark / Light</button>
