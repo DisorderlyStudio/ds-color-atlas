@@ -1547,6 +1547,33 @@
   html[data-view="phone"] .info-pop,
   html[data-view="ipad"] .info-pop { font-size: 0.9rem; max-width: 78vw; }
 
+  /* Tip-icons on/off switch (in the Help overlay) + the hidden state. */
+  .help-toggle-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    margin-top: 1.2rem; padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+  .help-toggle-label { font-size: 0.86rem; font-weight: 700; color: var(--text-secondary); line-height: 1.4; }
+  .help-toggle-label .help-i { width: 15px; height: 15px; font-size: 0.6rem; vertical-align: middle; }
+  .help-toggle {
+    position: relative; flex: 0 0 auto;
+    width: 46px; height: 26px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: #cfcfcf;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .help-toggle::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    transition: transform 0.15s;
+  }
+  .help-toggle.on { background: var(--accent); border-color: var(--accent); }
+  .help-toggle.on::after { transform: translateX(20px); }
+  html.tips-off .info-dot { display: none !important; }
+
 </style>
 </head>
 <body>
@@ -1730,6 +1757,10 @@
       <li><b>Copy to another device.</b> Use <i>Share my settings</i> to send your tuning to your iPad or iPhone in a tap.</li>
     </ol>
     <p class="help-tip-note">Look for the small <span class="help-i">i</span> icons around the app for quick tips on the trickier bits.</p>
+    <div class="help-toggle-row">
+      <span class="help-toggle-label">Show the <span class="help-i">i</span> tip icons around the app</span>
+      <button class="help-toggle on" id="tips-toggle" role="switch" aria-checked="true" aria-label="Show tip icons"></button>
+    </div>
   </div>
 </div>
 
@@ -4317,6 +4348,26 @@ document.querySelectorAll('.panel-section.collapsible > .panel-label').forEach(f
   if (closeBtn) closeBtn.addEventListener('click', closeHelp);
   if (bd) bd.addEventListener('click', closeHelp);
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeHelp(); });
+
+  // Tip-icons on/off, remembered per device. Off adds html.tips-off which hides
+  // every .info-dot via CSS.
+  const tipsToggle = document.getElementById('tips-toggle');
+  const tipsOff = localStorage.getItem('ds_hide_tips') === '1';
+  function applyTips(off) {
+    document.documentElement.classList.toggle('tips-off', off);
+    if (tipsToggle) {
+      tipsToggle.classList.toggle('on', !off);
+      tipsToggle.setAttribute('aria-checked', off ? 'false' : 'true');
+    }
+  }
+  applyTips(tipsOff);
+  if (tipsToggle) {
+    tipsToggle.addEventListener('click', function () {
+      const nowOff = !document.documentElement.classList.contains('tips-off');
+      try { localStorage.setItem('ds_hide_tips', nowOff ? '1' : '0'); } catch (e) {}
+      applyTips(nowOff);
+    });
+  }
 })();
 
 // ─── INFO TOOLTIPS (tap-to-open bubbles on the little "i" dots) ───────────────
