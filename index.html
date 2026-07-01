@@ -1375,6 +1375,84 @@
      viewing Disorderly Studio's values, not editing your own. */
   .cal-panel.studio .cal-sliders { opacity: 0.55; pointer-events: none; }
 
+  /* ── TOUCH MINIMUM FONT SIZE (≥13px) ───────────────────────────────────────
+     A hard floor so nothing on iPad/iPhone renders below ~13px (0.82rem).
+     Placed last so it overrides any earlier smaller view rules. Desktop is
+     untouched. */
+  html[data-view="phone"] .cal-swatch-label,
+  html[data-view="ipad"] .cal-swatch-label,
+  html[data-view="phone"] .match-num,
+  html[data-view="ipad"] .match-num,
+  html[data-view="phone"] .cal-ch,
+  html[data-view="ipad"] .cal-ch,
+  html[data-view="phone"] .cal-val,
+  html[data-view="ipad"] .cal-val,
+  html[data-view="phone"] .cal-list-brand,
+  html[data-view="ipad"] .cal-list-brand,
+  html[data-view="phone"] .source-btn,
+  html[data-view="ipad"] .source-btn,
+  html[data-view="phone"] .source-mini-btn,
+  html[data-view="ipad"] .source-mini-btn,
+  html[data-view="phone"] .toolbar-label,
+  html[data-view="ipad"] .toolbar-label,
+  html[data-view="phone"] .brand-group-count,
+  html[data-view="ipad"] .brand-group-count,
+  html[data-view="phone"] .brand-group-arrow,
+  html[data-view="ipad"] .brand-group-arrow,
+  html[data-view="phone"] .vivid-preview-label,
+  html[data-view="ipad"] .vivid-preview-label,
+  html[data-view="phone"] .global-hint,
+  html[data-view="ipad"] .global-hint,
+  html[data-view="phone"] .cal-list-empty,
+  html[data-view="ipad"] .cal-list-empty,
+  html[data-view="phone"] .cal-list-reset,
+  html[data-view="ipad"] .cal-list-reset,
+  html[data-view="phone"] .toolbar-btn,
+  html[data-view="ipad"] .toolbar-btn,
+  html[data-view="phone"] .zoom-pct,
+  html[data-view="ipad"] .zoom-pct,
+  html[data-view="phone"] .cal-btn,
+  html[data-view="ipad"] .cal-btn,
+  html[data-view="phone"] .no-brands,
+  html[data-view="ipad"] .no-brands,
+  html[data-view="phone"] .upload-btn,
+  html[data-view="ipad"] .upload-btn,
+  html[data-view="phone"] .brand-group-name,
+  html[data-view="ipad"] .brand-group-name,
+  html[data-view="phone"] .add-brands-label,
+  html[data-view="ipad"] .add-brands-label,
+  html[data-view="phone"] .empty-collection-note,
+  html[data-view="ipad"] .empty-collection-note,
+  html[data-view="phone"] .slider-label,
+  html[data-view="ipad"] .slider-label,
+  html[data-view="phone"] .upload-prompt p,
+  html[data-view="ipad"] .upload-prompt p,
+  html[data-view="phone"] .target-info,
+  html[data-view="ipad"] .target-info,
+  html[data-view="phone"] .brand-item label,
+  html[data-view="ipad"] .brand-item label,
+  html[data-view="phone"] .toolbar-extra .remember-toggle-label,
+  html[data-view="ipad"] .toolbar-extra .remember-toggle-label {
+    font-size: 0.82rem;
+  }
+  html[data-view="phone"] .brand-item label span,
+  html[data-view="ipad"] .brand-item label span {
+    font-size: 0.9rem;
+  }
+  html[data-view="phone"] .cal-title,
+  html[data-view="ipad"] .cal-title {
+    font-size: 0.88rem;
+  }
+  html[data-view="ipad"] input[type=range] { height: 30px; }
+  html[data-view="ipad"] input[type=range]::-webkit-slider-thumb {
+    width: 26px; height: 26px;
+  }
+  html[data-view="phone"] .toolbar-extra .toolbar-btn,
+  html[data-view="ipad"] .toolbar-extra .toolbar-btn,
+  html[data-view="phone"] .remember-toggle-label,
+  html[data-view="ipad"] .remember-toggle-label {
+    font-size: 0.82rem;
+  }
 </style>
 </head>
 <body>
