@@ -1595,8 +1595,22 @@
   // so any existing links/embeds with no param keep working exactly as before.
   (function() {
     const params = new URLSearchParams(window.location.search);
-    let view = (params.get('view') || 'desktop').toLowerCase();
-    if (view !== 'desktop' && view !== 'ipad' && view !== 'phone') view = 'desktop';
+    let view = (params.get('view') || '').toLowerCase();
+    if (view !== 'desktop' && view !== 'ipad' && view !== 'phone') {
+      // No explicit ?view — auto-detect so a plain shared link just works on
+      // whatever device opens it. Uses screen width + touch + user-agent.
+      // An explicit ?view always overrides this.
+      const touch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+      const ua = navigator.userAgent || '';
+      const isPhone = /iPhone|Android.*Mobile|Mobile.*Android|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+      const isTablet = /iPad|Android(?!.*Mobile)/i.test(ua) ||
+                       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS
+      const shortSide = Math.min(window.screen.width || 9999, window.screen.height || 9999);
+
+      if (isPhone || (touch && shortSide <= 430)) view = 'phone';
+      else if (isTablet || (touch && shortSide <= 1024)) view = 'ipad';
+      else view = 'desktop';
+    }
     document.documentElement.setAttribute('data-view', view);
   })();
 </script>
